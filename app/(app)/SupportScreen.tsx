@@ -10,6 +10,7 @@ const SupportScreen: React.FC = () => {
     const [selectedDonationType, setSelectedDonationType] = useState<string | null>(null);
     const [donationDescription, setDonationDescription] = useState('');
     const [contactInfo, setContactInfo] = useState('');
+    const [localisation, setLocalisation] = useState('');
     const [image, setImage] = useState<string | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [donHistory, setDonHistory] = useState<Don[]>([]);
@@ -123,17 +124,17 @@ const SupportScreen: React.FC = () => {
                 console.error('Erreur lors de l\'envoi du don financier:', error);
                 Alert.alert(
                     'Erreur',
-                    'Une erreur est survenue lors de l\'enregistrement de votre don. Veuillez réessayer plus tard.'
+                    'Une erreur est survenue lors de l\'enregistrement de votre don. Veuillez vérifier votre connexion et réessayer.'
                 );
             } finally {
                 setLoading(false);
             }
         } else if (selectedDonationType === 'objets') {
             // Vérifier que tous les champs requis sont remplis
-            if (!donationDescription.trim() || !contactInfo.trim() || !image) {
+            if (!donationDescription.trim() || !contactInfo.trim() || !image || !localisation.trim()) {
                 Alert.alert(
                     'Information manquante', 
-                    'Veuillez décrire votre don, laisser vos coordonnées et ajouter une photo de l\'objet.'
+                    'Veuillez décrire votre don, indiquer la localisation, laisser vos coordonnées et ajouter une photo de l\'objet.'
                 );
                 return;
             }
@@ -143,7 +144,8 @@ const SupportScreen: React.FC = () => {
             try {
                 const donInfo = {
                     description: donationDescription,
-                    coordonnees: contactInfo
+                    coordonnees: contactInfo,
+                    localisation: localisation
                 };
                 
                 const nouveauDon = await apiService.envoyerDonObjet(donInfo, image);
@@ -153,6 +155,7 @@ const SupportScreen: React.FC = () => {
                 setSelectedDonationType(null);
                 setDonationDescription('');
                 setContactInfo('');
+                setLocalisation('');
                 setImage(null);
                 
                 Alert.alert(
@@ -164,7 +167,7 @@ const SupportScreen: React.FC = () => {
                 console.error('Erreur lors de l\'envoi du don d\'objet:', error);
                 Alert.alert(
                     'Erreur',
-                    'Une erreur est survenue lors de l\'enregistrement de votre don. Veuillez réessayer plus tard.'
+                    'Une erreur est survenue lors de l\'enregistrement de votre don. Veuillez vérifier votre connexion et réessayer.'
                 );
             } finally {
                 setLoading(false);
@@ -200,6 +203,14 @@ const SupportScreen: React.FC = () => {
                         numberOfLines={4}
                         value={donationDescription}
                         onChangeText={setDonationDescription}
+                    />
+                    
+                    <Text style={styles.formLabel}>Localisation:</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Adresse où se trouve l'objet"
+                        value={localisation}
+                        onChangeText={setLocalisation}
                     />
                     
                     <Text style={styles.formLabel}>Photo de l'objet:</Text>
@@ -266,6 +277,7 @@ const SupportScreen: React.FC = () => {
                             setSelectedDonationType(null);
                             setDonationDescription('');
                             setContactInfo('');
+                            setLocalisation('');
                             setImage(null);
                         }}
                         disabled={loading}
@@ -336,12 +348,21 @@ const SupportScreen: React.FC = () => {
     };
     
     // Fonction pour formater la date
-    const formatDate = (date: Date) => {
-        return new Intl.DateTimeFormat('fr-FR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        }).format(date);
+    const formatDate = (dateString: string | Date) => {
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                return 'Date inconnue';
+            }
+            return new Intl.DateTimeFormat('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            }).format(date);
+        } catch (error) {
+            console.error('Erreur lors du formatage de la date:', error);
+            return 'Date inconnue';
+        }
     };
 
     // Rendu de l'historique des dons
@@ -367,16 +388,20 @@ const SupportScreen: React.FC = () => {
                             </Text>
                             <View style={[
                                 styles.statusBadge,
-                                don.statut === 'recu' ? styles.statusReceived : styles.statusPending
+                                don.statut === 'attribue' ? styles.statusReceived : 
+                                don.statut === 'reserve' ? styles.statusPending : 
+                                styles.statusAvailable
                             ]}>
                                 <Text style={styles.statusText}>
-                                    {don.statut === 'recu' ? 'Reçu' : 'En attente'}
+                                    {don.statut === 'attribue' ? 'Attribué' : 
+                                     don.statut === 'reserve' ? 'Réservé' : 
+                                     'Disponible'}
                                 </Text>
                             </View>
                         </View>
                         
                         <Text style={styles.donDateText}>
-                            {formatDate(don.date)}
+                            {formatDate(don.dateCreation || don.date)}
                         </Text>
                         
                         {don.type === 'financier' && don.montant && (
@@ -390,9 +415,9 @@ const SupportScreen: React.FC = () => {
                                 <Text style={styles.donDetailText}>
                                     {don.description}
                                 </Text>
-                                {don.imageUrl && (
+                                {don.photos && don.photos.length > 0 && (
                                     <Image 
-                                        source={{ uri: don.imageUrl }} 
+                                        source={{ uri: don.photos[0] }} 
                                         style={styles.donImageThumbnail} 
                                         resizeMode="cover"
                                     />
@@ -776,6 +801,9 @@ const styles = StyleSheet.create({
     },
     statusReceived: {
         backgroundColor: '#D1FAE5',
+    },
+    statusAvailable: {
+        backgroundColor: '#E3F2FD',  // Bleu clair pour disponible
     },
     statusText: {
         fontSize: 12,

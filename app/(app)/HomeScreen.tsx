@@ -35,13 +35,17 @@ const resources: ServiceItem[] = [
     { icon: 'people', title: 'Support pour Familles Endeuillées', route: "/(screens)/user/FamilleEndeuilleScreen" },
 ];
 
+const urgences: ServiceItem[] = [
+    { icon: 'medical', title: 'Victime de Tentative de Féminicide', route: "/(screens)/user/VictimeFeminicideScreen" },
+];
+
 const HomeScreen: React.FC = () => {
     return (
         <SafeAreaView style={styles.safeArea}>
             <ScrollView style={styles.container}>
                 <View style={styles.header}>
                     <Image 
-                        // source={require('../assets/images/Logopelycan.jpg')} // Ajoutez votre logo
+                        source={require('../../assets/images/Logopelycan.jpg')}
                         style={styles.logo}
                     />
                     <View style={styles.headerTextContainer}>
@@ -55,9 +59,9 @@ const HomeScreen: React.FC = () => {
 
                 <View style={styles.emergencySection}>
                     <TouchableOpacity style={styles.emergencyButton}>
-                        <Link href="/(screens)/user/DemandeUrgenceScreen" style={styles.emergencyButtonText}>
-                            <Ionicons name="warning" size={24} color="#FFF" />
-                            {" URGENCE IMMÉDIATE"}
+                        <Link href="/(screens)/user/DemandeUrgenceScreen" style={styles.emergencyButtonContent}>
+                            <Ionicons name="warning" size={28} color="#FF0000" />
+                            <Text style={styles.emergencyButtonText}>URGENCE IMMÉDIATE</Text>
                         </Link>
                     </TouchableOpacity>
                 </View>
@@ -65,66 +69,92 @@ const HomeScreen: React.FC = () => {
                 <View style={styles.mainContent}>
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                            <Ionicons name="alert-circle" size={24} color="#D81B60" />
-                            <Text style={styles.sectionTitle}>Urgences</Text>
+                            <Ionicons name="alert-circle" size={24} color="#FF5722" />
+                            <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>Urgences</Text>
                         </View>
-                        <TouchableOpacity style={styles.card}>
-                            <Link href="/(screens)/user/VictimeFeminicideScreen" style={styles.redLink}>
-                                <View style={styles.cardContent}>
-                                    <Ionicons name="medical" size={24} color="#FF0000" />
-                                    <Text style={styles.cardText}>Victime de Tentative de Féminicide</Text>
+                        <View style={styles.gridContainer}>
+                            {urgences.map((item, index) => (
+                                <View key={index} style={styles.gridCard}>
+                                    <TouchableOpacity style={styles.gridCardContent}>
+                                        <Link href={item.route as any}>
+                                            <View style={styles.cardInner}>
+                                                <View style={styles.gridIconContainer}>
+                                                    <Ionicons name={item.icon} size={32} color="#9C27B0" />
+                                                </View>
+                                                <Text style={styles.gridCardText}>{item.title}</Text>
+                                            </View>
+                                        </Link>
+                                    </TouchableOpacity>
                                 </View>
-                            </Link>
-                        </TouchableOpacity>
+                            ))}
+                        </View>
                     </View>
 
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                            <Ionicons name="home" size={24} color="#D81B60" />
-                            <Text style={styles.sectionTitle}>Services</Text>
+                            <Ionicons name="home" size={24} color="#FF5722" />
+                            <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>Services</Text>
                         </View>
-                        {services.map((item, index) => (
-                            <TouchableOpacity key={index} style={styles.card}>
-                                <Link href={item.route as any} style={styles.cardLink}>
-                                    <View style={styles.cardContent}>
-                                        <Ionicons name={item.icon} size={24} color="#D81B60" />
-                                        <Text style={styles.cardText}>{item.title}</Text>
-                                    </View>
-                                </Link>
-                            </TouchableOpacity>
-                        ))}
+                        <View style={styles.gridContainer}>
+                            {services.map((item, index) => (
+                                <View key={index} style={styles.gridCard}>
+                                    <TouchableOpacity style={styles.gridCardContent}>
+                                        <Link href={item.route as any}>
+                                            <View style={styles.cardInner}>
+                                                <View style={styles.gridIconContainer}>
+                                                    <Ionicons name={item.icon} size={32} color="#9C27B0" />
+                                                </View>
+                                                <Text style={styles.gridCardText}>{item.title}</Text>
+                                            </View>
+                                        </Link>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
                     </View>
 
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                            <Ionicons name="book" size={24} color="#D81B60" />
-                            <Text style={styles.sectionTitle}>Ressources</Text>
+                            <Ionicons name="book" size={24} color="#FF5722" />
+                            <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>Ressources</Text>
                         </View>
-                        {resources.map((item, index) => (
-                            <TouchableOpacity key={index} style={styles.card}>
-                                <Link href={item.route as any} style={styles.cardLink}>
-                                    <View style={styles.cardContent}>
-                                        <Ionicons name={item.icon} size={24} color="#D81B60" />
-                                        <Text style={styles.cardText}>{item.title}</Text>
-                                    </View>
-                                </Link>
-                            </TouchableOpacity>
-                        ))}
+                        <View style={styles.gridContainer}>
+                            {resources.map((item, index) => (
+                                <View key={index} style={styles.gridCard}>
+                                    <TouchableOpacity style={styles.gridCardContent}>
+                                        <Link href={item.route as any}>
+                                            <View style={styles.cardInner}>
+                                                <View style={styles.gridIconContainer}>
+                                                    <Ionicons name={item.icon} size={32} color="#9C27B0" />
+                                                </View>
+                                                <Text style={styles.gridCardText}>{item.title}</Text>
+                                            </View>
+                                        </Link>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
                     </View>
 
                     <View style={[styles.section, styles.lastSection]}>
                         <View style={styles.sectionHeader}>
-                            <Ionicons name="newspaper" size={24} color="#D81B60" />
-                            <Text style={styles.sectionTitle}>Actualités et Témoignages</Text>
+                            <Ionicons name="newspaper" size={24} color="#FF5722" />
+                            <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>Actualités et Témoignages</Text>
                         </View>
-                        <TouchableOpacity style={styles.card}>
-                            <Link href="/(screens)/user/ActualitesScreen" style={styles.cardLink}>
-                                <View style={styles.cardContent}>
-                                    <Ionicons name="time" size={24} color="#D81B60" />
-                                    <Text style={styles.cardText}>Dernières Actualités</Text>
-                                </View>
-                            </Link>
-                        </TouchableOpacity>
+                        <View style={styles.gridContainer}>
+                            <View style={styles.gridCard}>
+                                <TouchableOpacity style={styles.gridCardContent}>
+                                    <Link href="/(screens)/user/ActualitesScreen">
+                                        <View style={styles.cardInner}>
+                                            <View style={styles.gridIconContainer}>
+                                                <Ionicons name="time" size={32} color="#9C27B0" />
+                                            </View>
+                                            <Text style={styles.gridCardText}>Dernières Actualités</Text>
+                                        </View>
+                                    </Link>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     </View>
                 </View>
             </ScrollView>
@@ -135,7 +165,7 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#F8F0FF',
     },
     container: {
         flex: 1,
@@ -146,12 +176,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: '#E6E0FF',
+        elevation: 2,
     },
     logo: {
         width: 50,
         height: 50,
         marginRight: 15,
+        borderRadius: 25,
     },
     headerTextContainer: {
         flex: 1,
@@ -165,6 +197,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginTop: 5,
+        backgroundColor: '#F0FFF0',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
     },
     securityIndicator: {
         fontSize: 14,
@@ -175,14 +211,29 @@ const styles = StyleSheet.create({
         padding: 15,
     },
     emergencyButton: {
-        backgroundColor: '#FF0000',
-        borderRadius: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
         padding: 15,
         elevation: 3,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        borderWidth: 2,
+        borderColor: '#FF0000',
+    },
+    emergencyButtonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
     },
     emergencyButtonText: {
-        color: '#FFF',
-        fontSize: 18,
+        color: '#FF0000',
+        fontSize: 20,
         fontWeight: 'bold',
         textAlign: 'center',
     },
@@ -193,45 +244,83 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 15,
         marginBottom: 15,
-        padding: 15,
-        elevation: 2,
-    },
-    lastSection: {
-        marginBottom: 30,
+        padding: 12,
+        shadowColor: "#6A0DAD",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 3,
     },
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 15,
+        marginBottom: 12,
     },
     sectionTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: 'bold',
-        color: '#D81B60',
-        marginLeft: 10,
+        marginLeft: 8,
     },
-    card: {
-        backgroundColor: '#f8f8f8',
-        borderRadius: 10,
-        marginBottom: 10,
-        overflow: 'hidden',
-    },
-    cardLink: {
-        padding: 15,
-    },
-    cardContent: {
+    gridContainer: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        paddingHorizontal: 4,
+    },
+    gridCard: {
+        width: '48%',
+        marginBottom: 8,
+    },
+    gridCardContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        padding: 8,
         alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 110,
+        shadowColor: "#6A0DAD",
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 3,
     },
-    cardText: {
-        fontSize: 16,
-        color: '#333',
-        marginLeft: 10,
-        flex: 1,
+    cardInner: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
     },
-    redLink: {
-        padding: 15,
-        color: '#FF0000',
+    gridIconContainer: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#F8F0FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+        shadowColor: "#6A0DAD",
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
+        elevation: 2,
+    },
+    gridCardText: {
+        fontSize: 12,
+        color: '#4A154B',
+        textAlign: 'center',
+        fontWeight: '500',
+        paddingHorizontal: 4,
+    },
+    lastSection: {
+        marginBottom: 30,
     },
 });
 

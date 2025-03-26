@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, ActivityIndicator, RefreshControl, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api';
+
 interface User {
   id: string;
   fullName: string;
   email: string;
   role: 'admin' | 'pro' | 'user';
   status: 'active' | 'inactive';
+  createdAt: string;
 }
 
 const UsersManagementScreen: React.FC = () => {
@@ -17,6 +19,8 @@ const UsersManagementScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -33,8 +37,8 @@ const UsersManagementScreen: React.FC = () => {
       }
 
       const data = await response.json();
-      setUsers(data);
-      filterUsers(data, searchQuery);
+      setUsers(data.data);
+      filterUsers(data.data, searchQuery);
     } catch (error) {
       console.error('Erreur:', error);
       Alert.alert(
@@ -59,6 +63,9 @@ const UsersManagementScreen: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
+    const intervalId = setInterval(fetchUsers, 5000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -85,13 +92,47 @@ const UsersManagementScreen: React.FC = () => {
         filterUsers(updatedUsers, searchQuery);
         Alert.alert('Succès', 'Statut de l\'utilisateur mis à jour');
       } else {
-        throw new Error('Erreur lors de la mise à jour');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erreur lors de la mise à jour');
       }
     } catch (error) {
       console.error('Erreur:', error);
       Alert.alert(
         'Erreur',
-        'Impossible de mettre à jour le statut de l\'utilisateur'
+        (error as Error).message || 'Impossible de mettre à jour le statut de l\'utilisateur'
+      );
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: 'admin' | 'pro' | 'user') => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (response.ok) {
+        const updatedUsers = users.map(user =>
+          user.id === userId ? { ...user, role: newRole } : user
+        );
+        setUsers(updatedUsers);
+        filterUsers(updatedUsers, searchQuery);
+        setRoleModalVisible(false);
+        Alert.alert('Succès', 'Rôle de l\'utilisateur mis à jour');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erreur lors de la mise à jour');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      Alert.alert(
+        'Erreur',
+        (error as Error).message || 'Impossible de mettre à jour le rôle de l\'utilisateur'
       );
     }
   };
@@ -141,6 +182,15 @@ const UsersManagementScreen: React.FC = () => {
       </View>
       <View style={styles.actions}>
         <TouchableOpacity 
+          style={styles.roleButton}
+          onPress={() => {
+            setSelectedUser(item);
+            setRoleModalVisible(true);
+          }}
+        >
+          <Ionicons name="swap-horizontal" size={20} color="#2196F3" />
+        </TouchableOpacity>
+        <TouchableOpacity 
           style={[
             styles.statusButton,
             { backgroundColor: item.status === 'active' ? '#4CAF50' : '#f44336' }
@@ -156,6 +206,62 @@ const UsersManagementScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
     </View>
+  );
+
+  const renderRoleModal = () => (
+    <Modal
+      visible={roleModalVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setRoleModalVisible(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Changer le rôle</Text>
+          <Text style={styles.modalSubtitle}>
+            Utilisateur : {selectedUser?.fullName}
+          </Text>
+          <View style={styles.roleOptions}>
+            <TouchableOpacity
+              style={[
+                styles.roleOption,
+                selectedUser?.role === 'user' && styles.selectedRole
+              ]}
+              onPress={() => handleRoleChange(selectedUser!.id, 'user')}
+            >
+              <Ionicons name="person" size={24} color="#4CAF50" />
+              <Text style={styles.roleOptionText}>Utilisateur</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.roleOption,
+                selectedUser?.role === 'pro' && styles.selectedRole
+              ]}
+              onPress={() => handleRoleChange(selectedUser!.id, 'pro')}
+            >
+              <Ionicons name="briefcase" size={24} color="#2196F3" />
+              <Text style={styles.roleOptionText}>Professionnel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.roleOption,
+                selectedUser?.role === 'admin' && styles.selectedRole
+              ]}
+              onPress={() => handleRoleChange(selectedUser!.id, 'admin')}
+            >
+              <Ionicons name="shield-checkmark" size={24} color="#FF9800" />
+              <Text style={styles.roleOptionText}>Administrateur</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setRoleModalVisible(false)}
+          >
+            <Text style={styles.closeButtonText}>Fermer</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 
   if (loading) {
@@ -213,6 +319,8 @@ const UsersManagementScreen: React.FC = () => {
           </View>
         }
       />
+
+      {renderRoleModal()}
     </View>
   );
 };
@@ -298,11 +406,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  roleButton: {
+    padding: 8,
+    marginRight: 10,
+  },
   statusButton: {
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
-    marginLeft: 10,
   },
   statusButtonText: {
     color: '#fff',
@@ -319,6 +430,62 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+    width: '80%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  roleOptions: {
+    marginBottom: 20,
+  },
+  roleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: '#f5f5f5',
+  },
+  selectedRole: {
+    backgroundColor: '#e3f2fd',
+  },
+  roleOptionText: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#333',
+  },
+  closeButton: {
+    backgroundColor: '#2196F3',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

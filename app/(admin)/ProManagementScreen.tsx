@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, Modal, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, Modal, ActivityIndicator, RefreshControl, ScrollView, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api';
@@ -8,11 +8,16 @@ interface Professional {
   id: string;
   fullName: string;
   email: string;
-  speciality: string;
-  status: 'active' | 'pending' | 'inactive';
+  phone_number: string;
+  status: 'active' | 'pending' | 'inactive' | 'suspended';
   verificationDocuments: string[];
   activeCases: number;
   createdAt: string;
+  lastLogin?: string;
+  totalCases?: number;
+  rating?: number;
+  notes?: string;
+  availability?: boolean;
 }
 
 const ProManagementScreen: React.FC = () => {
@@ -23,6 +28,13 @@ const ProManagementScreen: React.FC = () => {
   const [selectedPro, setSelectedPro] = useState<Professional | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('newest');
+  const [notesModalVisible, setNotesModalVisible] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [selectedProForNotes, setSelectedProForNotes] = useState<Professional | null>(null);
+  const [statsModalVisible, setStatsModalVisible] = useState(false);
+  const [selectedProForStats, setSelectedProForStats] = useState<Professional | null>(null);
 
   const fetchProfessionals = async () => {
     try {
@@ -56,23 +68,48 @@ const ProManagementScreen: React.FC = () => {
 
   const filterProfessionals = (prosList: Professional[], query: string) => {
     const searchTerm = query.toLowerCase();
-    const filtered = prosList.filter(pro =>
+    let filtered = prosList.filter(pro =>
       pro.fullName.toLowerCase().includes(searchTerm) ||
       pro.email.toLowerCase().includes(searchTerm) ||
-      pro.speciality.toLowerCase().includes(searchTerm)
+      pro.phone_number.toLowerCase().includes(searchTerm)
     );
+
+    // Appliquer le filtre par statut
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(pro => pro.status === filterStatus);
+    }
+
+    // Appliquer le tri
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'oldest':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'activeCases':
+          return b.activeCases - a.activeCases;
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0);
+        default:
+          return 0;
+      }
+    });
+
     setFilteredPros(filtered);
   };
 
   useEffect(() => {
     fetchProfessionals();
+    const intervalId = setInterval(fetchProfessionals, 5000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
     filterProfessionals(professionals, searchQuery);
-  }, [searchQuery]);
+  }, [searchQuery, filterStatus, sortBy]);
 
-  const handleStatusChange = async (proId: string, newStatus: 'active' | 'pending' | 'inactive') => {
+  const handleStatusChange = async (proId: string, newStatus: 'active' | 'pending' | 'inactive' | 'suspended') => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       const response = await fetch(`${API_URL}/admin/professionals/${proId}/status`, {
@@ -142,8 +179,72 @@ const ProManagementScreen: React.FC = () => {
     switch (status) {
       case 'active': return '#4CAF50';
       case 'pending': return '#FFA000';
+      case 'suspended': return '#FF5722';
       case 'inactive': return '#f44336';
       default: return '#666';
+    }
+  };
+
+  const handleAddNote = async (proId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/admin/professionals/${proId}/notes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ note: noteText }),
+      });
+
+      if (response.ok) {
+        const updatedPros = professionals.map(pro => 
+          pro.id === proId 
+            ? { ...pro, notes: noteText } 
+            : pro
+        );
+        setProfessionals(updatedPros);
+        setNotesModalVisible(false);
+        setNoteText('');
+        Alert.alert('Succès', 'Note ajoutée avec succès');
+      } else {
+        throw new Error('Erreur lors de l\'ajout de la note');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      Alert.alert('Erreur', 'Impossible d\'ajouter la note');
+    }
+  };
+
+  const handleToggleAvailability = async (proId: string, currentAvailability: boolean) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/admin/professionals/${proId}/availability`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ availability: !currentAvailability }),
+      });
+
+      if (response.ok) {
+        const updatedPros = professionals.map(pro => 
+          pro.id === proId 
+            ? { ...pro, availability: !currentAvailability } 
+            : pro
+        );
+        setProfessionals(updatedPros);
+        Alert.alert(
+          'Succès',
+          `Le professionnel est maintenant ${!currentAvailability ? 'disponible' : 'indisponible'}`
+        );
+      } else {
+        throw new Error('Erreur lors de la mise à jour de la disponibilité');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      Alert.alert('Erreur', 'Impossible de mettre à jour la disponibilité');
     }
   };
 
@@ -158,10 +259,7 @@ const ProManagementScreen: React.FC = () => {
       <View style={styles.proInfo}>
         <Text style={styles.proName}>{item.fullName}</Text>
         <Text style={styles.proEmail}>{item.email}</Text>
-        <View style={styles.specialityContainer}>
-          <Ionicons name="medical" size={16} color="#666" />
-          <Text style={styles.specialityText}>{item.speciality}</Text>
-        </View>
+        <Text style={styles.proPhone}>{item.phone_number}</Text>
         <View style={styles.casesContainer}>
           <Ionicons name="folder" size={16} color="#666" />
           <Text style={styles.casesText}>{item.activeCases} cas actifs</Text>
@@ -171,14 +269,37 @@ const ProManagementScreen: React.FC = () => {
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
           <Text style={styles.statusText}>{item.status}</Text>
         </View>
-        {item.status === 'pending' && (
+        <View style={styles.actionButtons}>
           <TouchableOpacity 
-            style={styles.verifyButton}
-            onPress={() => handleStatusChange(item.id, 'active')}
+            style={styles.actionIcon}
+            onPress={() => {
+              setSelectedProForNotes(item);
+              setNoteText(item.notes || '');
+              setNotesModalVisible(true);
+            }}
           >
-            <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+            <Ionicons name="pencil" size={24} color="#2196F3" />
           </TouchableOpacity>
-        )}
+          <TouchableOpacity 
+            style={styles.actionIcon}
+            onPress={() => {
+              setSelectedProForStats(item);
+              setStatsModalVisible(true);
+            }}
+          >
+            <Ionicons name="stats-chart" size={24} color="#2196F3" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionIcon}
+            onPress={() => handleToggleAvailability(item.id, item.availability || false)}
+          >
+            <Ionicons 
+              name={item.availability ? "checkmark-circle" : "close-circle"} 
+              size={24} 
+              color={item.availability ? "#4CAF50" : "#f44336"} 
+            />
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -211,8 +332,8 @@ const ProManagementScreen: React.FC = () => {
                 <Text style={styles.detailText}>{selectedPro.email}</Text>
               </View>
               <View style={styles.detailRow}>
-                <Ionicons name="medical" size={20} color="#666" />
-                <Text style={styles.detailText}>{selectedPro.speciality}</Text>
+                <Ionicons name="call" size={20} color="#666" />
+                <Text style={styles.detailText}>{selectedPro.phone_number}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Ionicons name="folder" size={20} color="#666" />
@@ -240,6 +361,7 @@ const ProManagementScreen: React.FC = () => {
                 )}
               </View>
 
+              <Text style={styles.sectionTitle}>Actions</Text>
               <View style={styles.modalActions}>
                 {selectedPro.status === 'pending' && (
                   <TouchableOpacity 
@@ -252,26 +374,48 @@ const ProManagementScreen: React.FC = () => {
                     <Text style={styles.actionButtonText}>Approuver</Text>
                   </TouchableOpacity>
                 )}
-                {selectedPro.activeCases === 0 && (
+                {selectedPro.status === 'active' && (
                   <TouchableOpacity 
-                    style={[styles.actionButton, { backgroundColor: '#f44336' }]}
+                    style={[styles.actionButton, { backgroundColor: '#FFA000' }]}
                     onPress={() => {
                       Alert.alert(
                         'Confirmation',
-                        'Êtes-vous sûr de vouloir supprimer ce professionnel ?',
+                        'Êtes-vous sûr de vouloir suspendre ce professionnel ?',
                         [
                           {
                             text: 'Annuler',
                             style: 'cancel',
                           },
                           {
-                            text: 'Supprimer',
-                            onPress: () => handleDeletePro(selectedPro.id),
+                            text: 'Suspendre',
+                            onPress: () => {
+                              handleStatusChange(selectedPro.id, 'suspended');
+                              setModalVisible(false);
+                            },
                             style: 'destructive',
                           },
                         ],
                       );
                     }}
+                  >
+                    <Text style={styles.actionButtonText}>Suspendre</Text>
+                  </TouchableOpacity>
+                )}
+                {selectedPro.status === 'suspended' && (
+                  <TouchableOpacity 
+                    style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
+                    onPress={() => {
+                      handleStatusChange(selectedPro.id, 'active');
+                      setModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.actionButtonText}>Réactiver</Text>
+                  </TouchableOpacity>
+                )}
+                {selectedPro.activeCases === 0 && (
+                  <TouchableOpacity 
+                    style={[styles.actionButton, { backgroundColor: '#f44336' }]}
+                    onPress={() => handleDeletePro(selectedPro.id)}
                   >
                     <Text style={styles.actionButtonText}>Supprimer</Text>
                   </TouchableOpacity>
@@ -284,18 +428,142 @@ const ProManagementScreen: React.FC = () => {
     </Modal>
   );
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
+  const handleExportData = async () => {
+    try {
+      // Créer le contenu CSV avec les données importantes des professionnels
+      const csvData = professionals.map(pro => ({
+        'Nom complet': pro.fullName,
+        'Email': pro.email,
+        'Téléphone': pro.phone_number,
+        'Statut': pro.status,
+        'Cas actifs': pro.activeCases,
+        'Date d\'inscription': new Date(pro.createdAt).toLocaleDateString(),
+        'Dernière connexion': pro.lastLogin ? new Date(pro.lastLogin).toLocaleDateString() : 'Jamais',
+        'Total des cas': pro.totalCases || 0,
+        'Note moyenne': pro.rating || 'Non évalué',
+        'Disponibilité': pro.availability ? 'Oui' : 'Non'
+      }));
+
+      // Formater les données en CSV
+      const csvString = [
+        Object.keys(csvData[0]).join(','),
+        ...csvData.map(row => Object.values(row).join(','))
+      ].join('\n');
+
+      // Partager les données
+      await Share.share({
+        message: csvString,
+        title: 'Données des professionnels',
+      });
+
+      Alert.alert(
+        'Succès',
+        'Les données ont été partagées avec succès',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Erreur lors du partage:', error);
+      Alert.alert('Erreur', 'Impossible de partager les données');
+    }
+  };
+
+  const renderFilterButtons = () => (
+    <View style={styles.filterContainer}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filterStatus === 'all' && styles.filterButtonActive
+          ]}
+          onPress={() => setFilterStatus('all')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filterStatus === 'all' && styles.filterButtonTextActive
+          ]}>Tous</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filterStatus === 'active' && styles.filterButtonActive
+          ]}
+          onPress={() => setFilterStatus('active')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filterStatus === 'active' && styles.filterButtonTextActive
+          ]}>Actifs</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filterStatus === 'pending' && styles.filterButtonActive
+          ]}
+          onPress={() => setFilterStatus('pending')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filterStatus === 'pending' && styles.filterButtonTextActive
+          ]}>En attente</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filterStatus === 'suspended' && styles.filterButtonActive
+          ]}
+          onPress={() => setFilterStatus('suspended')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filterStatus === 'suspended' && styles.filterButtonTextActive
+          ]}>Suspendus</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+
+  const renderSortOptions = () => (
+    <View style={styles.sortContainer}>
+      <Text style={styles.sortLabel}>Trier par:</Text>
+      <TouchableOpacity
+        style={styles.sortButton}
+        onPress={() => {
+          Alert.alert(
+            'Trier par',
+            'Choisissez un critère de tri',
+            [
+              { text: 'Plus récents', onPress: () => setSortBy('newest') },
+              { text: 'Plus anciens', onPress: () => setSortBy('oldest') },
+              { text: 'Cas actifs', onPress: () => setSortBy('activeCases') },
+              { text: 'Note moyenne', onPress: () => setSortBy('rating') },
+              { text: 'Annuler', style: 'cancel' }
+            ]
+          );
+        }}
+      >
+        <Text style={styles.sortButtonText}>
+          {sortBy === 'newest' ? 'Plus récents' :
+           sortBy === 'oldest' ? 'Plus anciens' :
+           sortBy === 'activeCases' ? 'Cas actifs' :
+           sortBy === 'rating' ? 'Note moyenne' : 'Trier par'}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color="#666" />
+      </TouchableOpacity>
       </View>
     );
-  }
 
-  return (
-    <View style={styles.container}>
+  const renderHeader = () => (
       <View style={styles.header}>
         <Text style={styles.title}>Gestion des Professionnels</Text>
+      <View style={styles.headerActions}>
+        <TouchableOpacity
+          style={styles.exportButton}
+          onPress={handleExportData}
+        >
+          <Ionicons name="download" size={24} color="#2196F3" />
+          <Text style={styles.exportButtonText}>Exporter</Text>
+        </TouchableOpacity>
+      </View>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
           <TextInput
@@ -314,8 +582,117 @@ const ProManagementScreen: React.FC = () => {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      {renderFilterButtons()}
+      {renderSortOptions()}
+    </View>
+  );
 
+  const renderNotesModal = () => (
+    <Modal
+      visible={notesModalVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setNotesModalVisible(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Notes sur le professionnel</Text>
+          <TextInput
+            style={styles.notesInput}
+            multiline
+            numberOfLines={4}
+            value={noteText}
+            onChangeText={setNoteText}
+            placeholder="Ajouter une note..."
+            placeholderTextColor="#999"
+          />
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#2196F3' }]}
+              onPress={() => {
+                if (selectedProForNotes) {
+                  handleAddNote(selectedProForNotes.id);
+                }
+              }}
+            >
+              <Text style={styles.actionButtonText}>Enregistrer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#f44336' }]}
+              onPress={() => setNotesModalVisible(false)}
+            >
+              <Text style={styles.actionButtonText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderStatsModal = () => (
+    <Modal
+      visible={statsModalVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setStatsModalVisible(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Statistiques du professionnel</Text>
+          {selectedProForStats && (
+            <>
+              <View style={styles.statsRow}>
+                <Ionicons name="folder" size={24} color="#2196F3" />
+                <Text style={styles.statsText}>
+                  Total des cas: {selectedProForStats.totalCases || 0}
+                </Text>
+              </View>
+              <View style={styles.statsRow}>
+                <Ionicons name="time" size={24} color="#2196F3" />
+                <Text style={styles.statsText}>
+                  Dernière connexion: {selectedProForStats.lastLogin 
+                    ? new Date(selectedProForStats.lastLogin).toLocaleString()
+                    : 'Jamais'}
+                </Text>
+              </View>
+              <View style={styles.statsRow}>
+                <Ionicons name="star" size={24} color="#FFD700" />
+                <Text style={styles.statsText}>
+                  Note moyenne: {selectedProForStats?.rating !== undefined && selectedProForStats?.rating !== null
+                    ? `${Number(selectedProForStats.rating).toFixed(1)}/5`
+                    : 'Non évalué'}
+                </Text>
+              </View>
+              <View style={styles.statsRow}>
+                <Ionicons name="calendar" size={24} color="#2196F3" />
+                <Text style={styles.statsText}>
+                  Membre depuis: {new Date(selectedProForStats.createdAt).toLocaleDateString()}
+                </Text>
+              </View>
+            </>
+          )}
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#2196F3', marginTop: 20 }]}
+            onPress={() => setStatsModalVisible(false)}
+          >
+            <Text style={styles.actionButtonText}>Fermer</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2196F3" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {renderHeader()}
       <FlatList
         data={filteredPros}
         renderItem={renderProItem}
@@ -339,8 +716,9 @@ const ProManagementScreen: React.FC = () => {
           </View>
         }
       />
-
       <DetailModal />
+      {renderNotesModal()}
+      {renderStatsModal()}
     </View>
   );
 };
@@ -412,15 +790,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 5,
   },
-  specialityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  specialityText: {
-    marginLeft: 5,
-    color: '#666',
+  proPhone: {
     fontSize: 14,
+    color: '#666',
+    marginTop: 5,
   },
   casesContainer: {
     flexDirection: 'row',
@@ -539,6 +912,102 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 10,
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2196F3',
+  },
+  exportButtonText: {
+    color: '#2196F3',
+    marginLeft: 5,
+    fontWeight: '600',
+  },
+  filterContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  filterButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    marginRight: 10,
+  },
+  filterButtonActive: {
+    backgroundColor: '#2196F3',
+  },
+  filterButtonText: {
+    color: '#666',
+    fontWeight: '500',
+  },
+  filterButtonTextActive: {
+    color: '#fff',
+  },
+  sortContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  sortLabel: {
+    marginRight: 10,
+    color: '#666',
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    padding: 8,
+    borderRadius: 8,
+  },
+  sortButtonText: {
+    marginRight: 5,
+    color: '#333',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  actionIcon: {
+    padding: 5,
+    marginLeft: 5,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    marginVertical: 10,
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  statsText: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#333',
+  },
+  statsLabel: {
+    marginRight: 10,
+    color: '#666',
+  },
+  statsValue: {
+    color: '#333',
   },
 });
 

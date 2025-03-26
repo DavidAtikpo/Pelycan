@@ -42,10 +42,14 @@ export interface Don {
   type: 'objet' | 'financier';
   description?: string;
   montant?: number;
-  imageUrl?: string;
+  photos?: string[];
   coordonnees?: string;
-  statut: 'en_attente' | 'recu';
+  localisation?: string;
+  statut: 'disponible' | 'reserve' | 'attribue';
   date: Date;
+  dateCreation?: Date;
+  dateMiseAJour?: Date;
+  etat?: string;
 }
 
 // Interface pour les demandes d'ajout de logement
@@ -64,22 +68,24 @@ export interface DemandeAjoutLogement {
 
 // Interface pour les données d'un logement
 export interface Logement {
-  id?: string;
+  id: string;
   titre: string;
-  type: string;
   adresse: string;
   ville: string;
-  codePostal: string;
-  nbChambres: number;
-  nbPersonnes: number;
+  type: string;
+  capacite: number;
   surface: number;
   description: string;
-  disponibilite: string;
-  amenities: string[];
+  equipements: string[];
+  disponibilite: boolean;
+  status: string;
   photos: string[];
-  userId?: string;
-  dateCreation?: string;
-  equipements?: Record<string, boolean>; // Pour les équipements sous forme d'objet avec des booleans
+  type_hebergement: 'permanent' | 'temporaire';
+  date_debut?: Date;
+  date_fin?: Date;
+  conditions_temporaire?: string;
+  created_at: Date;
+  updated_at: Date;
 }
 
 // Fonctions de gestion des tokens
@@ -182,26 +188,27 @@ const getHeaders = (token?: string | null) => {
 };
 
 /**
- * Récupère tous les logements disponibles
- * @param token Token d'authentification (optionnel)
+ * Récupère la liste des logements depuis le serveur
+ * @param token Token d'authentification optionnel
  * @returns Une promesse contenant les données des logements
  */
-export const getLogements = async (token?: string | null) => {
-  try {
-    const response = await fetch(`${API_URL}/logements`, {
-      headers: getHeaders(token),
-    });
-    
-    if (!response.ok) {
-      throw new Error('Erreur lors de la récupération des logements');
+export const getLogements = async (token?: string | null): Promise<Logement[]> => {
+    try {
+        const response = await fetch(`${API_URL}/logements`, {
+            method: 'GET',
+            headers: getHeaders(token),
+        });
+
+        if (!response.ok) {
+            throw new Error('Erreur lors de la récupération des logements');
+        }
+
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Erreur dans getLogements:', error);
+        throw error;
     }
-    
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error("Erreur lors de la récupération des logements:", error);
-    throw error;
-  }
 };
 
 /**
@@ -408,8 +415,9 @@ export const envoyerDonObjet = async (don: Omit<Don, 'id' | 'date' | 'statut' | 
       type: 'objet',
       description: don.description,
       coordonnees: don.coordonnees,
-      imageUrl: imageUrl,
-      statut: 'en_attente',
+      localisation: don.localisation,
+      photos: imageUrl ? [imageUrl] : [],
+      statut: 'disponible',
       date: new Date()
     };
     
@@ -456,7 +464,7 @@ export const envoyerDonFinancier = async (montant: number): Promise<Don> => {
     const donData: Omit<Don, 'id'> = {
       type: 'financier',
       montant: montant,
-      statut: 'en_attente',
+      statut: 'disponible',
       date: new Date()
     };
 
@@ -661,30 +669,25 @@ const creerLogement = async (logementData: Logement): Promise<Logement> => {
     }
     
     // Convertir les équipements en chaîne de caractères séparée par des virgules
-    const equipementsString = logementData.equipements 
-      ? Object.entries(logementData.equipements)
-          .filter(([_, value]) => value)
-          .map(([key, _]) => key)
-          .join(',')
-      : logementData.amenities?.join(',') || '';
+    const equipementsString = logementData.equipements.join(',');
     
     // Adapter le format des données au format attendu par le serveur
-    // selon la structure de donnée dans logementsController.js
     const logementServeur = {
       titre: logementData.titre,
       description: logementData.description,
       adresse: logementData.adresse, 
       ville: logementData.ville,
-      code_postal: logementData.codePostal,
-      nombre_pieces: logementData.nbChambres,
-      superficie: logementData.surface,
-      loyer: 0, // valeur par défaut pour un logement solidaire
-      charges: 0, // valeur par défaut pour un logement solidaire
+      type: logementData.type,
+      capacite: logementData.capacite,
+      surface: logementData.surface,
       disponibilite: logementData.disponibilite,
-      type_logement: logementData.type,
-      image_url: logementData.photos && logementData.photos.length > 0 ? logementData.photos[0] : '',
-      equipements: equipementsString,
-      images: logementData.photos // Ajout du tableau d'images complet
+      status: logementData.status,
+      photos: logementData.photos,
+      type_hebergement: logementData.type_hebergement,
+      date_debut: logementData.date_debut,
+      date_fin: logementData.date_fin,
+      conditions_temporaire: logementData.conditions_temporaire,
+      equipements: equipementsString
     };
     
     console.log('==========================================');
@@ -751,6 +754,30 @@ const creerLogement = async (logementData: Logement): Promise<Logement> => {
   }
 };
 
+// Annuler une demande d'ajout de logement
+const annulerDemandeAjoutLogement = async (id: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+        const token = await AsyncStorage.getItem('userToken');
+        const response = await fetch(`${API_URL}/demandes-ajout-logement/${id}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            return { success: false, message: error.message };
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('Erreur lors de l\'annulation de la demande:', error);
+        return { success: false, message: 'Une erreur est survenue lors de l\'annulation de la demande' };
+    }
+};
+
 // Export par défaut de toutes les fonctions de l'API
 const apiService = {
   getLogements,
@@ -765,7 +792,8 @@ const apiService = {
   getDemandeAjoutLogement,
   uploadImage,
   uploadMultipleImages,
-  creerLogement
+  creerLogement,
+  annulerDemandeAjoutLogement
 };
 
 export default apiService; 

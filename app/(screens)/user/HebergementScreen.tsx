@@ -1,45 +1,54 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Animated } from 'react-native';
+import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
 
 interface HebergementInfo {
     nom: string;
-    adresse: string;
-    telephone: string;
-    disponibilite: string;
     description: string;
     type: 'accueil' | 'maison' | 'foyer';
 }
 
 const centres: HebergementInfo[] = [
     {
-        nom: "Centre d'Accueil d'Urgence",
-        adresse: "15 rue de la Paix, Paris",
-        telephone: "01 23 45 67 89",
-        disponibilite: "24h/24",
+        nom: "Hebergement",
         description: "Hébergement d'urgence pour femmes victimes de violences, avec ou sans enfants.",
         type: 'accueil'
     },
     {
-        nom: "Maison des Femmes",
-        adresse: "25 avenue de la République, Lyon",
-        telephone: "04 56 78 90 12",
-        disponibilite: "24h/24",
+        nom: "Structure",
+
         description: "Structure d'accueil sécurisée avec accompagnement social et psychologique.",
         type: 'maison'
     },
     {
-        nom: "Foyer d'Urgence",
-        adresse: "8 rue de la Solidarité, Marseille",
-        telephone: "04 91 23 45 67",
-        disponibilite: "24h/24",
+        nom: "Hebergement Temporaire",
+
         description: "Hébergement temporaire avec suivi personnalisé et soutien juridique.",
         type: 'foyer'
     }
 ];
 
 const HebergementScreen: React.FC = () => {
+    const pulseAnim = new Animated.Value(1);
+
+    React.useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 1.1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+    }, []);
+
     const handleCall = (telephone: string) => {
         Linking.openURL(`tel:${telephone}`);
     };
@@ -135,39 +144,52 @@ const HebergementScreen: React.FC = () => {
     return (
         <ScrollView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Centres d'Hébergement d'Urgence</Text>
-                <Text style={styles.subtitle}>Disponibles 24h/24 et 7j/7</Text>
-            </View>
-
-            <View style={styles.infoSection}>
-                <Text style={styles.infoText}>
-                    En cas d'urgence immédiate, contactez le 3919 (numéro gratuit et anonyme)
-                </Text>
+                <View style={styles.headerContent}>
+                    <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                        <MaterialIcons name="home" size={40} color="#FF5722" />
+                    </Animated.View>
+                    <Text style={styles.title}>Centres d'Hébergement d'Urgence</Text>
+                    <Text style={styles.subtitle}>Disponibles 24h/24 et 7j/7</Text>
+                </View>
             </View>
 
             {centres.map((centre, index) => (
                 <View key={index} style={styles.centreCard}>
-                    <Text style={styles.centreName}>{centre.nom}</Text>
-                    <View style={styles.centreInfo}>
-                        <View style={styles.infoRow}>
-                            <Ionicons name="location" size={20} color="#D81B60" />
-                            <Text style={styles.infoText}>{centre.adresse}</Text>
+                    <View style={styles.centreHeader}>
+                        <View style={styles.iconContainer}>
+                            <MaterialIcons 
+                                name={centre.type === 'accueil' ? 'home' : 
+                                      centre.type === 'maison' ? 'house' : 'apartment'} 
+                                size={28} 
+                                color="#FF5722" 
+                            />
                         </View>
-                        <View style={styles.infoRow}>
-                            <Ionicons name="time" size={20} color="#D81B60" />
-                            <Text style={styles.infoText}>{centre.disponibilite}</Text>
-                        </View>
-                        <Text style={styles.description}>{centre.description}</Text>
+                        <Text style={styles.centreName}>{centre.nom}</Text>
                     </View>
-                    {renderButtons(centre)}
+                    
+                    <View style={styles.centreInfo}>
+                        <View style={styles.descriptionContainer}>
+                            <MaterialIcons name="info" size={20} color="#4A154B" />
+                            <Text style={styles.description}>{centre.description}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.buttonsContainer}>
+                        {renderButtons(centre)}
+                    </View>
                 </View>
             ))}
 
             <View style={styles.disclaimer}>
-                <Text style={styles.disclaimerText}>
-                    Ces centres sont disponibles pour vous accueillir en toute sécurité et confidentialité.
-                    Une équipe de professionnels est présente pour vous accompagner.
-                </Text>
+                <View style={styles.disclaimerContent}>
+                    <View style={styles.disclaimerIconContainer}>
+                        <MaterialIcons name="security" size={24} color="#FF5722" />
+                    </View>
+                    <Text style={styles.disclaimerText}>
+                        Ces centres sont disponibles pour vous accueillir en toute sécurité et confidentialité.
+                        Une équipe de professionnels est présente pour vous accompagner.
+                    </Text>
+                </View>
             </View>
         </ScrollView>
     );
@@ -176,90 +198,144 @@ const HebergementScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#F8F0FF',
     },
     header: {
-        padding: 20,
         backgroundColor: '#fff',
+        paddingTop: 40,
+        paddingBottom: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: '#E6E0FF',
+        elevation: 2,
+    },
+    headerContent: {
+        alignItems: 'center',
+        paddingHorizontal: 20,
     },
     title: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#4A154B',
+        marginTop: 10,
+        textAlign: 'center',
     },
     subtitle: {
         fontSize: 16,
-        color: '#666',
+        color: '#FF5722',
         marginTop: 5,
-    },
-    infoSection: {
-        padding: 15,
-        backgroundColor: '#D81B60',
-        margin: 10,
-        borderRadius: 8,
-    },
-    infoText: {
-        color: '#fff',
-        fontSize: 16,
         textAlign: 'center',
+        fontWeight: '500',
     },
     centreCard: {
         backgroundColor: '#fff',
-        margin: 10,
-        borderRadius: 8,
-        padding: 15,
-        elevation: 2,
+        margin: 15,
+        borderRadius: 15,
+        padding: 20,
+        elevation: 3,
+        shadowColor: "#6A0DAD",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
     },
-    centreName: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 10,
-    },
-    centreInfo: {
-        marginBottom: 15,
-    },
-    infoRow: {
+    centreHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 15,
+    },
+    iconContainer: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#F8F0FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+        elevation: 2,
+        shadowColor: "#6A0DAD",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    centreName: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#4A154B',
+    },
+    centreInfo: {
+        marginBottom: 20,
+    },
+    descriptionContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginTop: 10,
+        backgroundColor: '#F8F0FF',
+        padding: 15,
+        borderRadius: 12,
     },
     description: {
         fontSize: 14,
-        color: '#666',
-        marginTop: 8,
+        color: '#4A154B',
+        marginLeft: 10,
+        flex: 1,
+        lineHeight: 20,
     },
     buttonsContainer: {
         flexDirection: 'column',
-        gap: 10,
-        marginTop: 10,
+        gap: 12,
     },
     actionButton: {
-        backgroundColor: '#D81B60',
+        backgroundColor: '#FF5722',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 12,
-        borderRadius: 8,
+        padding: 15,
+        borderRadius: 12,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        gap: 10,
     },
     buttonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
-        marginLeft: 8,
     },
     disclaimer: {
+        backgroundColor: '#fff',
+        margin: 15,
+        borderRadius: 15,
         padding: 20,
-        backgroundColor: '#f8f8f8',
-        margin: 10,
-        borderRadius: 8,
+        elevation: 3,
+        shadowColor: "#6A0DAD",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+    },
+    disclaimerContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    disclaimerIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F8F0FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+        elevation: 2,
+        shadowColor: "#6A0DAD",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
     },
     disclaimerText: {
         fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
+        color: '#4A154B',
+        flex: 1,
+        lineHeight: 20,
         fontStyle: 'italic',
     },
 });

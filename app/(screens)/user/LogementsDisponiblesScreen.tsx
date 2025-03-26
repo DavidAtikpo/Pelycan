@@ -20,7 +20,8 @@ interface Logement {
     charges?: number;
     disponibilite: string;
     description: string;
-    image_url?: string;
+    photos?: string[];
+    permission: boolean;
 }
 
 const LogementsDisponiblesScreen: React.FC = () => {
@@ -66,7 +67,8 @@ const LogementsDisponiblesScreen: React.FC = () => {
                             charges: 80,
                             disponibilite: 'Immédiate',
                             description: 'Appartement rénové en centre-ville, proche des commodités.',
-                            image_url: 'https://example.com/image1.jpg'
+                            image_url: 'https://example.com/image1.jpg',
+                            permission: true
                         },
                         {
                             id: '2',
@@ -81,7 +83,8 @@ const LogementsDisponiblesScreen: React.FC = () => {
                             charges: 50,
                             disponibilite: 'Sous 7 jours',
                             description: 'Studio entièrement meublé et équipé, idéal pour une personne seule.',
-                            image_url: 'https://example.com/image2.jpg'
+                            image_url: 'https://example.com/image2.jpg',
+                            permission: true
                         }
                     ];
                     
@@ -92,7 +95,7 @@ const LogementsDisponiblesScreen: React.FC = () => {
                 
                     // Appel à l'API avec le token
                 const data = await apiService.getLogements(token);
-                setLogements(data as Logement[]);
+                setLogements(data as unknown as Logement[]);
                 setLoading(false);
             } catch (err) {
                 console.error("Erreur lors de la récupération des logements:", err);
@@ -109,7 +112,7 @@ const LogementsDisponiblesScreen: React.FC = () => {
             setLoading(true);
             setError(null);
             const data = await apiService.getLogements(token);
-            setLogements(data as Logement[]);
+                setLogements(data as unknown as Logement[]);
             setLoading(false);
         } catch (err) {
             console.error("Erreur lors de la récupération des logements:", err);
@@ -120,10 +123,10 @@ const LogementsDisponiblesScreen: React.FC = () => {
 
     const renderLogement = ({ item }: { item: Logement }) => (
         <View style={styles.logementCard}>
-            {item.image_url && (
+            {item.photos && item.photos.length > 0 && (
                 <View style={styles.imageContainer}>
                     <Image 
-                        source={{ uri: item.image_url }} 
+                        source={{ uri: item.photos[0] }} 
                         style={styles.logementImage}
                         resizeMode="cover"
                     />

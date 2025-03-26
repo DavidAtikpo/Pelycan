@@ -140,37 +140,115 @@ const StatistiqueScreen: React.FC = () => {
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
 
   const fetchStatistics = async () => {
+    console.log('🚀 Début de fetchStatistics, timeFrame:', timeFrame);
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`${API_URL}/api/admin/statistics?timeFrame=${timeFrame}`, {
+      if (!token) {
+        console.error('❌ Token non trouvé dans AsyncStorage');
+        setStats(defaultStats);
+        return;
+      }
+      console.log('✅ Token récupéré');
+
+      const url = `${API_URL}/admin/statistics?timeFrame=${timeFrame}`;
+      console.log('📡 Appel API:', url);
+
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
 
-      if (!response.ok) throw new Error('Erreur lors de la récupération des statistiques');
+      console.log('📥 Status de la réponse:', response.status);
+      
+      if (!response.ok) {
+        console.error('❌ Erreur serveur:', {
+          status: response.status,
+          statusText: response.statusText
+        });
+        setStats(defaultStats);
+        return;
+      }
+
       const data = await response.json();
-      setStats(data || defaultStats);
+      console.log('📦 Données reçues:', JSON.stringify(data, null, 2));
+
+      // Vérification détaillée de la structure
+      const checks = {
+        hasUserStats: Boolean(data?.userStats),
+        hasCaseStats: Boolean(data?.caseStats),
+        hasProStats: Boolean(data?.proStats)
+      };
+      console.log('🔍 Vérifications de structure:', checks);
+
+      if (checks.hasUserStats && checks.hasCaseStats && checks.hasProStats) {
+        // Vérification des sous-propriétés importantes
+        const detailedChecks = {
+          userStats: {
+            total: data.userStats.total ?? 'manquant',
+            active: data.userStats.active ?? 'manquant',
+            inactive: data.userStats.inactive ?? 'manquant',
+            newThisMonth: data.userStats.newThisMonth ?? 'manquant'
+          },
+          caseStats: {
+            total: data.caseStats.total ?? 'manquant',
+            urgent: data.caseStats.urgent ?? 'manquant',
+            inProgress: data.caseStats.inProgress ?? 'manquant',
+            completed: data.caseStats.completed ?? 'manquant',
+            hasByType: Boolean(data.caseStats.byType),
+            hasMonthlyData: Boolean(data.caseStats.monthlyData)
+          },
+          proStats: {
+            total: data.proStats.total ?? 'manquant',
+            active: data.proStats.active ?? 'manquant',
+            pending: data.proStats.pending ?? 'manquant',
+            averageCaseLoad: data.proStats.averageCaseLoad ?? 'manquant'
+          }
+        };
+        console.log('🔍 Vérification détaillée des propriétés:', detailedChecks);
+
+        // Ajout des valeurs par défaut si nécessaire
+        if (!data.caseStats.byType) {
+          console.log('⚠️ byType manquant, utilisation des valeurs par défaut');
+          data.caseStats.byType = defaultStats.caseStats.byType;
+        }
+        if (!data.caseStats.monthlyData) {
+          console.log('⚠️ monthlyData manquant, utilisation des valeurs par défaut');
+          data.caseStats.monthlyData = defaultStats.caseStats.monthlyData;
+        }
+
+        console.log('✅ Mise à jour des stats avec:', JSON.stringify(data, null, 2));
+        setStats(data);
+      } else {
+        console.error('❌ Structure de données invalide:', {
+          reçu: Object.keys(data || {}),
+          attendu: ['userStats', 'caseStats', 'proStats']
+        });
+        setStats(defaultStats);
+      }
     } catch (error) {
-      console.error('Erreur:', error);
+      console.error('❌ Erreur lors de la récupération des statistiques:', error);
       setStats(defaultStats);
     } finally {
+      console.log('🏁 Fin de fetchStatistics');
       setLoading(false);
     }
   };
 
   const fetchData = async () => {
+    console.log('🚀 Début de fetchData');
     try {
       const token = await AsyncStorage.getItem('userToken');
+      console.log('📡 Récupération des données professionnels et cas');
       
       // Fetch professionals
-      const proResponse = await fetch(`${API_URL}/api/admin/professionals`, {
+      const proResponse = await fetch(`${API_URL}/admin/professionals`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       // Fetch unassigned cases
-      const casesResponse = await fetch(`${API_URL}/api/admin/unassigned-cases`, {
+      const casesResponse = await fetch(`${API_URL}/admin/cases/unassigned`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -184,17 +262,22 @@ const StatistiqueScreen: React.FC = () => {
         setCases(defaultCases);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
+      console.error('❌ Erreur fetchData:', error);
       setProfessionals(defaultProfessionals);
       setCases(defaultCases);
     } finally {
+      console.log('🏁 Fin de fetchData');
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    console.log('🔄 useEffect déclenché, timeFrame:', timeFrame);
     fetchStatistics();
     fetchData();
+    return () => {
+      console.log('🧹 Nettoyage useEffect');
+    };
   }, [timeFrame]);
 
   const handleAssignment = async (professional: Professional) => {
@@ -202,7 +285,7 @@ const StatistiqueScreen: React.FC = () => {
 
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`${API_URL}/api/admin/assign-case`, {
+      const response = await fetch(`${API_URL}/admin/assignments`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -233,7 +316,7 @@ const StatistiqueScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Statistiques Détaillées</Text>
         <View style={styles.timeFrameSelector}>
@@ -264,125 +347,135 @@ const StatistiqueScreen: React.FC = () => {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Vue d'ensemble des Cas</Text>
-        <View style={styles.statsGrid}>
-          <View style={styles.statBox}>
-            <Ionicons name="folder" size={24} color="#2196F3" />
-            <Text style={styles.statNumber}>{stats.caseStats.total}</Text>
-            <Text style={styles.statLabel}>Total des Cas</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Ionicons name="alert-circle" size={24} color="#f44336" />
-            <Text style={styles.statNumber}>{stats.caseStats.urgent}</Text>
-            <Text style={styles.statLabel}>Cas Urgents</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Ionicons name="time" size={24} color="#FFA000" />
-            <Text style={styles.statNumber}>{stats.caseStats.inProgress}</Text>
-            <Text style={styles.statLabel}>En Cours</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-            <Text style={styles.statNumber}>{stats.caseStats.completed}</Text>
-            <Text style={styles.statLabel}>Complétés</Text>
-          </View>
-        </View>
-
-        <Text style={styles.chartTitle}>Évolution des Cas</Text>
-        {stats.caseStats.monthlyData && (
-          <LineChart
-            data={{
-              labels: stats.caseStats.monthlyData.map(d => d.month),
-              datasets: [{
-                data: stats.caseStats.monthlyData.map(d => d.count)
-              }]
-            }}
-            width={Dimensions.get('window').width - 40}
-            height={220}
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`
-            }}
-            bezier
-          />
-        )}
-
-        <Text style={styles.chartTitle}>Répartition par Type</Text>
-        {stats?.caseStats?.byType && stats.caseStats.byType.length > 0 ? (
-          <PieChart
-            data={stats.caseStats.byType.map(d => ({
-              name: d.name || 'Sans nom',
-              population: d.count || 0,
-              color: d.color || '#cccccc',
-              legendFontColor: '#333',
-              legendFontSize: 12
-            }))}
-            width={Dimensions.get('window').width - 40}
-            height={220}
-            accessor="population"
-            backgroundColor="transparent"
-            paddingLeft="15"
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`
-            }}
-          />
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Text style={styles.noDataText}>Aucune donnée disponible</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Statistiques des Professionnels</Text>
-        <View style={styles.proStats}>
-          <View style={styles.proStatRow}>
-            <Text style={styles.proStatLabel}>Professionnels Actifs:</Text>
-            <Text style={styles.proStatValue}>{stats.proStats.active}</Text>
-          </View>
-          <View style={styles.proStatRow}>
-            <Text style={styles.proStatLabel}>En Attente de Validation:</Text>
-            <Text style={styles.proStatValue}>{stats.proStats.pending}</Text>
-          </View>
-          <View style={styles.proStatRow}>
-            <Text style={styles.proStatLabel}>Charge Moyenne:</Text>
-            <Text style={styles.proStatValue}>{stats.proStats.averageCaseLoad} cas/pro</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Assignation des Cas</Text>
-        <FlatList
-          data={cases}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.caseItem}
-              onPress={() => {
-                setSelectedCase(item);
-                setModalVisible(true);
-              }}
-            >
-              <View style={styles.caseHeader}>
-                <Text style={styles.caseTitle}>{item.title}</Text>
-                <Text style={[styles.casePriority, 
-                  { color: item.priority === 'Urgent' ? '#ff4444' : '#2196F3' }]}>
-                  {item.priority}
-                </Text>
+      <FlatList
+        data={[1]}
+        keyExtractor={() => 'main'}
+        renderItem={() => (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Vue d'ensemble des Cas</Text>
+              <View style={styles.statsGrid}>
+                <View style={styles.statBox}>
+                  <Ionicons name="folder" size={24} color="#2196F3" />
+                  <Text style={styles.statNumber}>{stats.caseStats.total}</Text>
+                  <Text style={styles.statLabel}>Total des Cas</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Ionicons name="alert-circle" size={24} color="#f44336" />
+                  <Text style={styles.statNumber}>{stats.caseStats.urgent}</Text>
+                  <Text style={styles.statLabel}>Cas Urgents</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Ionicons name="time" size={24} color="#FFA000" />
+                  <Text style={styles.statNumber}>{stats.caseStats.inProgress}</Text>
+                  <Text style={styles.statLabel}>En Cours</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                  <Text style={styles.statNumber}>{stats.caseStats.completed}</Text>
+                  <Text style={styles.statLabel}>Complétés</Text>
+                </View>
               </View>
-              <Text style={styles.caseStatus}>Status: {item.status}</Text>
-            </TouchableOpacity>
-          )}
-        />
-      </View>
+
+              <Text style={styles.chartTitle}>Évolution des Cas</Text>
+              {stats.caseStats.monthlyData && stats.caseStats.monthlyData.length > 0 ? (
+                <LineChart
+                  data={{
+                    labels: stats.caseStats.monthlyData.map(d => d.month),
+                    datasets: [{
+                      data: stats.caseStats.monthlyData.map(d => d.count || 0)
+                    }]
+                  }}
+                  width={Dimensions.get('window').width - 40}
+                  height={220}
+                  chartConfig={{
+                    backgroundColor: '#ffffff',
+                    backgroundGradientFrom: '#ffffff',
+                    backgroundGradientTo: '#ffffff',
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`
+                  }}
+                  bezier
+                  style={styles.chart}
+                />
+              ) : (
+                <View style={styles.noDataContainer}>
+                  <Text style={styles.noDataText}>Aucune donnée disponible</Text>
+                </View>
+              )}
+
+              <Text style={styles.chartTitle}>Répartition par Type</Text>
+              {stats.caseStats.byType && stats.caseStats.byType.length > 0 ? (
+                <PieChart
+                  data={stats.caseStats.byType.map(d => ({
+                    name: d.name || 'Sans nom',
+                    population: d.count || 0,
+                    color: d.color || '#cccccc',
+                    legendFontColor: '#333',
+                    legendFontSize: 12
+                  }))}
+                  width={Dimensions.get('window').width - 40}
+                  height={220}
+                  accessor="population"
+                  backgroundColor="transparent"
+                  paddingLeft="15"
+                  chartConfig={{
+                    backgroundColor: '#ffffff',
+                    backgroundGradientFrom: '#ffffff',
+                    backgroundGradientTo: '#ffffff',
+                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`
+                  }}
+                />
+              ) : (
+                <View style={styles.noDataContainer}>
+                  <Text style={styles.noDataText}>Aucune donnée disponible</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Statistiques des Professionnels</Text>
+              <View style={styles.proStats}>
+                <View style={styles.proStatRow}>
+                  <Text style={styles.proStatLabel}>Professionnels Actifs:</Text>
+                  <Text style={styles.proStatValue}>{stats.proStats.active}</Text>
+                </View>
+                <View style={styles.proStatRow}>
+                  <Text style={styles.proStatLabel}>En Attente de Validation:</Text>
+                  <Text style={styles.proStatValue}>{stats.proStats.pending}</Text>
+                </View>
+                <View style={styles.proStatRow}>
+                  <Text style={styles.proStatLabel}>Charge Moyenne:</Text>
+                  <Text style={styles.proStatValue}>{stats.proStats.averageCaseLoad} cas/pro</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Assignation des Cas</Text>
+              {cases.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.caseItem}
+                  onPress={() => {
+                    setSelectedCase(item);
+                    setModalVisible(true);
+                  }}
+                >
+                  <View style={styles.caseHeader}>
+                    <Text style={styles.caseTitle}>{item.title}</Text>
+                    <Text style={[styles.casePriority, 
+                      { color: item.priority === 'Urgent' ? '#ff4444' : '#2196F3' }]}>
+                      {item.priority}
+                    </Text>
+                  </View>
+                  <Text style={styles.caseStatus}>Status: {item.status}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+      />
 
       <AssignmentModal
         visible={modalVisible}
@@ -393,7 +486,7 @@ const StatistiqueScreen: React.FC = () => {
         professionals={professionals}
         onAssign={handleAssignment}
       />
-    </ScrollView>
+    </View>
   );
 };
 

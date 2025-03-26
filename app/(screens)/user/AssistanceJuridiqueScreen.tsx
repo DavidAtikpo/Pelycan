@@ -51,13 +51,6 @@ const AssistanceJuridiqueScreen: React.FC = () => {
                 <Text style={styles.subtitle}>Vos droits et démarches</Text>
             </View>
 
-            <View style={styles.emergencyInfo}>
-                <Ionicons name="warning" size={24} color="#fff" />
-                <Text style={styles.emergencyText}>
-                    En cas d'urgence, appelez le 17 ou le 112
-                </Text>
-            </View>
-
             <View style={styles.infoBox}>
                 <Text style={styles.infoTitle}>Important à savoir</Text>
                 <Text style={styles.infoText}>

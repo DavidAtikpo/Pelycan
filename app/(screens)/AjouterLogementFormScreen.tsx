@@ -42,6 +42,10 @@ interface LogementFormData {
         ascenseur: boolean;
     };
     photos: string[];
+    typeHebergement: 'permanent' | 'temporaire';
+    dateDebut: string;
+    dateFin: string;
+    conditions: string;
 }
 
 const AjouterLogementFormScreen: React.FC = () => {
@@ -72,7 +76,11 @@ const AjouterLogementFormScreen: React.FC = () => {
             parking: false,
             ascenseur: false
         },
-        photos: []
+        photos: [],
+        typeHebergement: 'permanent',
+        dateDebut: new Date().toISOString().split('T')[0],
+        dateFin: '',
+        conditions: ''
     });
     
     // Vérifier si l'utilisateur a l'autorisation d'ajouter un logement
@@ -207,6 +215,34 @@ const AjouterLogementFormScreen: React.FC = () => {
             Alert.alert('Code postal invalide', 'Veuillez entrer un code postal français valide (5 chiffres).');
             return false;
         }
+
+        // Validation des dates pour l'hébergement temporaire
+        if (formData.typeHebergement === 'temporaire') {
+            if (!formData.dateDebut || !formData.dateFin) {
+                Alert.alert('Dates requises', 'Veuillez spécifier les dates de début et de fin de disponibilité.');
+                return false;
+            }
+
+            const dateDebut = new Date(formData.dateDebut);
+            const dateFin = new Date(formData.dateFin);
+            const aujourdhui = new Date();
+            aujourdhui.setHours(0, 0, 0, 0);
+
+            if (dateDebut < aujourdhui) {
+                Alert.alert('Date invalide', 'La date de début ne peut pas être dans le passé.');
+                return false;
+            }
+
+            if (dateFin <= dateDebut) {
+                Alert.alert('Date invalide', 'La date de fin doit être postérieure à la date de début.');
+                return false;
+            }
+
+            if (!formData.conditions.trim()) {
+                Alert.alert('Conditions requises', 'Veuillez spécifier les conditions de l\'hébergement temporaire.');
+                return false;
+            }
+        }
         
         return true;
     };
@@ -335,13 +371,24 @@ const AjouterLogementFormScreen: React.FC = () => {
             
             // Ajouter les URLs des photos au logement et convertir equipements en amenities
             const logementComplet = {
-                ...logementData,
-                photos: photoUrls,
-                // Convertir les equipements (object avec booléens) en amenities (tableau de chaînes)
-                amenities: Object.entries(formData.equipements)
+                titre: logementData.titre,
+                adresse: logementData.adresse,
+                ville: logementData.ville,
+                type: logementData.type,
+                capacite: logementData.nbPersonnes,
+                surface: logementData.surface,
+                description: logementData.description,
+                equipements: Object.entries(formData.equipements)
                     .filter(([_, value]) => value)
-                    .map(([key, _]) => key)
-            };
+                    .map(([key, _]) => key),
+                disponibilite: true,
+                status: 'en_attente',
+                photos: photoUrls,
+                type_hebergement: formData.typeHebergement,
+                date_debut: formData.dateDebut ? new Date(formData.dateDebut) : undefined,
+                date_fin: formData.dateFin ? new Date(formData.dateFin) : undefined,
+                conditions_temporaire: formData.conditions
+            } as unknown as Logement;
             
             console.log('Étape 4: Objet logement complet préparé', logementComplet);
             
@@ -410,6 +457,27 @@ const AjouterLogementFormScreen: React.FC = () => {
         <View style={styles.formContainer}>
             <Text style={styles.stepTitle}>Étape 1 : Informations de base</Text>
             
+            <Text style={styles.label}>Type d'hébergement</Text>
+            <View style={styles.typeContainer}>
+                {['permanent', 'temporaire'].map(type => (
+                    <TouchableOpacity
+                        key={type}
+                        style={[
+                            styles.typeButton,
+                            formData.typeHebergement === type && styles.selectedTypeButton
+                        ]}
+                        onPress={() => updateFormData('typeHebergement', type)}
+                    >
+                        <Text style={[
+                            styles.typeButtonText,
+                            formData.typeHebergement === type && styles.selectedTypeButtonText
+                        ]}>
+                            {type === 'permanent' ? 'Hébergement permanent' : 'Hébergement temporaire'}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
             <Text style={styles.label}>Titre du logement <Text style={styles.requiredField}>*</Text></Text>
             <TextInput
                 style={styles.input}
@@ -450,6 +518,42 @@ const AjouterLogementFormScreen: React.FC = () => {
                     />
                 </View>
             </View>
+
+            {formData.typeHebergement === 'temporaire' && (
+                <>
+                    <Text style={styles.label}>Période de disponibilité <Text style={styles.requiredField}>*</Text></Text>
+                    <View style={styles.rowContainer}>
+                        <View style={styles.halfInput}>
+                            <Text style={styles.label}>Date de début</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={formData.dateDebut}
+                                onChangeText={(value) => updateFormData('dateDebut', value)}
+                                placeholder="YYYY-MM-DD"
+                            />
+                        </View>
+                        <View style={styles.halfInput}>
+                            <Text style={styles.label}>Date de fin</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={formData.dateFin}
+                                onChangeText={(value) => updateFormData('dateFin', value)}
+                                placeholder="YYYY-MM-DD"
+                            />
+                        </View>
+                    </View>
+
+                    <Text style={styles.label}>Conditions de l'hébergement temporaire <Text style={styles.requiredField}>*</Text></Text>
+                    <TextInput
+                        style={[styles.input, styles.textArea]}
+                        placeholder="Ex: Durée minimale de séjour, conditions de résiliation, etc."
+                        value={formData.conditions}
+                        onChangeText={(value) => updateFormData('conditions', value)}
+                        multiline
+                        numberOfLines={4}
+                    />
+                </>
+            )}
             
             <Text style={styles.label}>Type de logement</Text>
             <View style={styles.typeContainer}>

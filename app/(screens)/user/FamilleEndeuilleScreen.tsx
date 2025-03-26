@@ -1,8 +1,18 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { FamilleEndeuilleStackParamList } from './navigation';
+
+type FamilleEndeuilleScreenNavigationProp = StackNavigationProp<
+    FamilleEndeuilleStackParamList,
+    'FamilleEndeuille'
+>;
 
 const FamilleEndeuilleScreen: React.FC = () => {
+    const navigation = useNavigation<FamilleEndeuilleScreenNavigationProp>();
+
     const handleCall = (numero: string) => {
         Linking.openURL(`tel:${numero}`);
     };
@@ -27,21 +37,30 @@ const FamilleEndeuilleScreen: React.FC = () => {
 
             <View style={styles.resourcesSection}>
                 <Text style={styles.sectionTitle}>Ressources Disponibles</Text>
-                <TouchableOpacity style={styles.resourceCard}>
+                <TouchableOpacity 
+                    style={styles.resourceCard}
+                    onPress={() => navigation.navigate('GroupesParole')}
+                >
                     <Text style={styles.resourceTitle}>👥 Groupes de Parole</Text>
                     <Text style={styles.resourceDescription}>
                         Rencontrez d'autres familles et partagez votre expérience dans un cadre bienveillant
                     </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.resourceCard}>
+                <TouchableOpacity 
+                    style={styles.resourceCard}
+                    onPress={() => navigation.navigate('SoutienPsychologique')}
+                >
                     <Text style={styles.resourceTitle}>💭 Soutien Psychologique</Text>
                     <Text style={styles.resourceDescription}>
                         Accompagnement personnalisé par des professionnels spécialisés
                     </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.resourceCard}>
+                <TouchableOpacity 
+                    style={styles.resourceCard}
+                    onPress={() => navigation.navigate('AideJuridique')}
+                >
                     <Text style={styles.resourceTitle}>⚖️ Aide Juridique</Text>
                     <Text style={styles.resourceDescription}>
                         Assistance pour les démarches administratives et juridiques
@@ -51,21 +70,15 @@ const FamilleEndeuilleScreen: React.FC = () => {
 
             <View style={styles.associationsSection}>
                 <Text style={styles.sectionTitle}>Associations Partenaires</Text>
-                {/* Liste des associations */}
-                <TouchableOpacity style={styles.associationCard}>
+                <TouchableOpacity 
+                    style={styles.associationCard}
+                    onPress={() => navigation.navigate('AssociationsPartenaires')}
+                >
                     <Text style={styles.associationName}>Association d'Aide aux Familles</Text>
                     <Text style={styles.associationContact}>Contact: 01 XX XX XX XX</Text>
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.memorialSection}>
-                <Text style={styles.sectionTitle}>Espace Mémorial</Text>
-                <TouchableOpacity style={styles.memorialButton}>
-                    <Text style={styles.memorialButtonText}>
-                        Accéder à l'espace de commémoration
-                    </Text>
-                </TouchableOpacity>
-            </View>
         </ScrollView>
     );
 };

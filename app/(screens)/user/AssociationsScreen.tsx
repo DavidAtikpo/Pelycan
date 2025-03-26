@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Animated } from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 interface Association {
     nom: string;
@@ -53,6 +53,25 @@ const associations: Association[] = [
 ];
 
 const AssociationsScreen: React.FC = () => {
+    const pulseAnim = new Animated.Value(1);
+
+    React.useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 1.1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+    }, []);
+
     const handleCall = (telephone: string) => {
         Linking.openURL(`tel:${telephone}`);
     };
@@ -66,35 +85,51 @@ const AssociationsScreen: React.FC = () => {
     return (
         <ScrollView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Associations d'Aide aux Victimes</Text>
-                <Text style={styles.subtitle}>Des professionnels à votre écoute</Text>
-            </View>
-
-            <View style={styles.emergencyInfo}>
-                <Ionicons name="warning" size={24} color="#fff" />
-                <Text style={styles.emergencyText}>
-                    En cas d'urgence, appelez le 17 ou le 112
-                </Text>
+                <View style={styles.headerContent}>
+                    <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                        <MaterialIcons name="people" size={40} color="#FF5722" />
+                    </Animated.View>
+                    <Text style={styles.title}>Associations d'Aide aux Victimes</Text>
+                    <Text style={styles.subtitle}>Des professionnels à votre écoute</Text>
+                </View>
             </View>
 
             {associations.map((association, index) => (
                 <View key={index} style={styles.associationCard}>
-                    <Text style={styles.associationName}>{association.nom}</Text>
-                    <Text style={styles.description}>{association.description}</Text>
+                    <View style={styles.associationHeader}>
+                        <View style={styles.iconContainer}>
+                            <MaterialIcons name="business" size={28} color="#FF5722" />
+                        </View>
+                        <Text style={styles.associationName}>{association.nom}</Text>
+                    </View>
+
+                    <View style={styles.descriptionContainer}>
+                        <MaterialIcons name="info" size={20} color="#4A154B" />
+                        <Text style={styles.description}>{association.description}</Text>
+                    </View>
                     
                     <View style={styles.servicesContainer}>
-                        <Text style={styles.servicesTitle}>Services proposés :</Text>
+                        <View style={styles.servicesHeader}>
+                            <MaterialIcons name="list" size={24} color="#FF5722" />
+                            <Text style={styles.servicesTitle}>Services proposés</Text>
+                        </View>
                         {association.services.map((service, idx) => (
                             <View key={idx} style={styles.serviceItem}>
-                                <Ionicons name="checkmark-circle" size={16} color="#D81B60" />
+                                <View style={styles.serviceIconContainer}>
+                                    <MaterialIcons name="check-circle" size={20} color="#FF5722" />
+                                </View>
                                 <Text style={styles.serviceText}>{service}</Text>
                             </View>
                         ))}
                     </View>
 
-                    <View style={styles.infoRow}>
-                        <Ionicons name="time" size={20} color="#D81B60" />
-                        <Text style={styles.infoText}>{association.horaires}</Text>
+                    <View style={styles.infoContainer}>
+                        <View style={styles.infoItem}>
+                            <View style={styles.infoIconContainer}>
+                                <MaterialIcons name="schedule" size={20} color="#FF5722" />
+                            </View>
+                            <Text style={styles.infoText}>{association.horaires}</Text>
+                        </View>
                     </View>
 
                     <View style={styles.buttonContainer}>
@@ -102,7 +137,7 @@ const AssociationsScreen: React.FC = () => {
                             style={styles.callButton}
                             onPress={() => handleCall(association.telephone)}
                         >
-                            <Ionicons name="call" size={24} color="#fff" />
+                            <MaterialIcons name="phone" size={24} color="#fff" />
                             <Text style={styles.buttonText}>Appeler</Text>
                         </TouchableOpacity>
 
@@ -111,7 +146,7 @@ const AssociationsScreen: React.FC = () => {
                                 style={styles.websiteButton}
                                 onPress={() => handleWebsite(association.website)}
                             >
-                                <Ionicons name="globe" size={24} color="#D81B60" />
+                                <MaterialIcons name="language" size={24} color="#FF5722" />
                                 <Text style={styles.websiteButtonText}>Site Web</Text>
                             </TouchableOpacity>
                         )}
@@ -120,10 +155,15 @@ const AssociationsScreen: React.FC = () => {
             ))}
 
             <View style={styles.disclaimer}>
-                <Text style={styles.disclaimerText}>
-                    Toutes ces associations sont engagées dans la lutte contre les violences 
-                    et vous garantissent confidentialité et accompagnement professionnel.
-                </Text>
+                <View style={styles.disclaimerContent}>
+                    <View style={styles.disclaimerIconContainer}>
+                        <MaterialIcons name="security" size={24} color="#FF5722" />
+                    </View>
+                    <Text style={styles.disclaimerText}>
+                        Toutes ces associations sont engagées dans la lutte contre les violences 
+                        et vous garantissent confidentialité et accompagnement professionnel.
+                    </Text>
+                </View>
             </View>
         </ScrollView>
     );
@@ -132,134 +172,217 @@ const AssociationsScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5F5F5',
+        backgroundColor: '#F8F0FF',
     },
     header: {
-        padding: 20,
         backgroundColor: '#fff',
+        paddingTop: 40,
+        paddingBottom: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: '#E6E0FF',
+        elevation: 2,
+    },
+    headerContent: {
+        alignItems: 'center',
+        paddingHorizontal: 20,
     },
     title: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#4A154B',
+        marginTop: 10,
+        textAlign: 'center',
     },
     subtitle: {
         fontSize: 16,
-        color: '#666',
+        color: '#FF5722',
         marginTop: 5,
-    },
-    emergencyInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#D81B60',
-        padding: 15,
-        margin: 10,
-        borderRadius: 8,
-        justifyContent: 'center',
-    },
-    emergencyText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginLeft: 10,
+        textAlign: 'center',
+        fontWeight: '500',
     },
     associationCard: {
         backgroundColor: '#fff',
-        margin: 10,
-        borderRadius: 8,
-        padding: 15,
+        margin: 15,
+        borderRadius: 15,
+        padding: 20,
+        elevation: 3,
+        shadowColor: "#6A0DAD",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+    },
+    associationHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    iconContainer: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#F8F0FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
         elevation: 2,
+        shadowColor: "#6A0DAD",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
     },
     associationName: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
+        color: '#4A154B',
+    },
+    descriptionContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: '#F8F0FF',
+        padding: 15,
+        borderRadius: 12,
+        marginBottom: 15,
     },
     description: {
         fontSize: 14,
-        color: '#666',
-        marginBottom: 15,
+        color: '#4A154B',
+        marginLeft: 10,
+        flex: 1,
+        lineHeight: 20,
     },
     servicesContainer: {
         marginBottom: 15,
     },
+    servicesHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
     servicesTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
+        color: '#FF5722',
+        marginLeft: 10,
     },
     serviceItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 5,
+        marginBottom: 8,
+    },
+    serviceIconContainer: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#F8F0FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
     },
     serviceText: {
         fontSize: 14,
-        color: '#666',
-        marginLeft: 8,
+        color: '#4A154B',
+        flex: 1,
     },
-    infoRow: {
+    infoContainer: {
+        marginBottom: 15,
+    },
+    infoItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 15,
+    },
+    infoIconContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#F8F0FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
     },
     infoText: {
         fontSize: 14,
-        color: '#666',
-        marginLeft: 8,
+        color: '#4A154B',
     },
     buttonContainer: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        gap: 10,
     },
     callButton: {
-        backgroundColor: '#D81B60',
+        backgroundColor: '#FF5722',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 12,
-        borderRadius: 8,
+        padding: 15,
+        borderRadius: 12,
         flex: 1,
-        marginRight: 8,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        gap: 10,
     },
     buttonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
-        marginLeft: 8,
     },
     websiteButton: {
         backgroundColor: '#fff',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 12,
-        borderRadius: 8,
+        padding: 15,
+        borderRadius: 12,
         flex: 1,
-        marginLeft: 8,
-        borderWidth: 1,
-        borderColor: '#D81B60',
+        borderWidth: 2,
+        borderColor: '#FF5722',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
+        gap: 10,
     },
     websiteButtonText: {
-        color: '#D81B60',
+        color: '#FF5722',
         fontSize: 16,
         fontWeight: 'bold',
-        marginLeft: 8,
     },
     disclaimer: {
+        backgroundColor: '#fff',
+        margin: 15,
+        borderRadius: 15,
         padding: 20,
-        backgroundColor: '#f8f8f8',
-        margin: 10,
-        borderRadius: 8,
+        elevation: 3,
+        shadowColor: "#6A0DAD",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+    },
+    disclaimerContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    disclaimerIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F8F0FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+        elevation: 2,
+        shadowColor: "#6A0DAD",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
     },
     disclaimerText: {
         fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
+        color: '#4A154B',
+        flex: 1,
+        lineHeight: 20,
         fontStyle: 'italic',
     },
 });

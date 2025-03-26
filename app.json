@@ -15,6 +15,11 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/Logopelycan.jpg",
         "backgroundColor": "#ffffff"
+      },
+      "package": "com.pelycan.app",
+      "versionCode": 1,
+      "networkSecurityConfig": {
+        "cleartextTrafficPermitted": true
       }
     },
     "web": {
@@ -37,6 +42,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "0fac2a8c-fc0d-4f98-86ff-76fdbc4e21f1"
+      }
     }
   }
 }
