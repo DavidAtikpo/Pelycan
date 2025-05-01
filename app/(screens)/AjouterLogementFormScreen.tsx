@@ -99,7 +99,7 @@ const AjouterLogementFormScreen: React.FC = () => {
                             [
                                 {
                                     text: 'Faire une demande',
-                                    onPress: () => router.push('/AjouterLogementScreen')
+                                    onPress: () => router.push('../AjouterLogementScreen')
                                 },
                                 {
                                     text: 'Retour',

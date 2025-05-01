@@ -14,7 +14,7 @@ const RegisterScreen: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
-    const [biometricData, setBiometricData] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
 
     const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
@@ -29,11 +29,7 @@ const RegisterScreen: React.FC = () => {
             return;
         }
 
-        if (!biometricData) {
-            Alert.alert('Erreur', 'Veuillez ajouter une empreinte digitale pour continuer');
-            return;
-        }
-
+        setIsLoading(true);
         try {
             console.log('Tentative de connexion à:', `${API_URL}/auth/register`);
 
@@ -41,8 +37,7 @@ const RegisterScreen: React.FC = () => {
                 fullName,
                 email,
                 password,
-                phoneNumber,
-                biometricData
+                phoneNumber
             };
             
             console.log('Données envoyées:', requestBody);
@@ -56,9 +51,7 @@ const RegisterScreen: React.FC = () => {
                 body: JSON.stringify(requestBody)
             });
 
-            console.log('Status:', response.status);
             const data = await response.json();
-            console.log('Réponse:', data);
 
             if (response.ok) {
                 Alert.alert('Succès', 'Inscription réussie !');
@@ -67,16 +60,21 @@ const RegisterScreen: React.FC = () => {
                 Alert.alert('Erreur', data.message || 'Erreur lors de l\'inscription');
             }
         } catch (error: any) {
-            console.error('Erreur détaillée:', {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
-            });
+            console.error('Erreur détaillée:', error);
             
-            Alert.alert(
-                'Erreur de connexion',
-                'Impossible de se connecter au serveur. Veuillez vérifier votre connexion internet et réessayer.'
-            );
+            if (error.message === 'Network request failed') {
+                Alert.alert(
+                    'Erreur de connexion',
+                    'Impossible de se connecter au serveur. Veuillez vérifier votre connexion internet et réessayer.'
+                );
+            } else {
+                Alert.alert(
+                    'Erreur',
+                    'Une erreur inattendue s\'est produite. Veuillez réessayer plus tard.'
+                );
+            }
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -106,57 +104,6 @@ const RegisterScreen: React.FC = () => {
         } catch (error) {
             console.error('Erreur Google Sign-In:', error);
             Alert.alert('Erreur', 'Échec de la connexion avec Google');
-        }
-    };
-
-    const handleAddFingerprint = async () => {
-        try {
-            // Vérifier si l'authentification biométrique est disponible
-            const hasHardware = await LocalAuthentication.hasHardwareAsync();
-            const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-            
-            console.log('État de l\'authentification biométrique:', { hasHardware, isEnrolled });
-
-            if (!hasHardware) {
-                Alert.alert('Non disponible', 'Votre appareil ne dispose pas d\'un capteur biométrique');
-                return;
-            }
-
-            if (!isEnrolled) {
-                Alert.alert('Non configuré', 'Veuillez configurer l\'authentification biométrique dans les paramètres de votre appareil');
-                return;
-            }
-
-            // Demander l'authentification biométrique
-            const result = await LocalAuthentication.authenticateAsync({
-                promptMessage: 'Authentifiez-vous pour ajouter votre empreinte',
-                fallbackLabel: 'Utiliser le code PIN',
-                disableDeviceFallback: false,
-            });
-
-            console.log('Résultat de l\'authentification:', result);
-
-            if (result.success) {
-                // Générer une clé unique pour représenter l'authentification biométrique
-                const uniqueKey = `biometric_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                setBiometricData(uniqueKey);
-                Alert.alert('Succès', 'Empreinte digitale ajoutée avec succès');
-            } else {
-                Alert.alert('Échec', 'L\'authentification biométrique a échoué');
-            }
-        } catch (error) {
-            console.error('Erreur biométrique détaillée:', error);
-            Alert.alert('Erreur', 'Impossible d\'ajouter l\'empreinte digitale. Veuillez réessayer.');
-        }
-    };
-
-    const handleRemoveFingerprint = async () => {
-        try {
-            setBiometricData(null);
-            Alert.alert('Succès', 'Empreinte digitale supprimée avec succès');
-        } catch (error) {
-            console.error('Erreur lors de la suppression:', error);
-            Alert.alert('Erreur', 'Impossible de supprimer l\'empreinte digitale');
         }
     };
 
@@ -223,33 +170,14 @@ const RegisterScreen: React.FC = () => {
                         </View>
                     </View>
 
-                    <View style={styles.biometricContainer}>
-                        <TouchableOpacity 
-                            style={[styles.biometricButton, biometricData ? styles.biometricButtonSuccess : null]} 
-                            onPress={handleAddFingerprint}
-                        >
-                            <Ionicons 
-                                name={biometricData ? "finger-print" : "finger-print-outline"} 
-                                size={24} 
-                                color={biometricData ? "#fff" : "#D81B60"} 
-                            />
-                            <Text style={[styles.biometricButtonText, biometricData ? styles.biometricButtonTextSuccess : null]}>
-                                {biometricData ? 'Empreinte digitale ajoutée' : 'Ajouter une empreinte digitale'}
-                            </Text>
-                        </TouchableOpacity>
-                        {biometricData && (
-                            <TouchableOpacity 
-                                style={styles.biometricButtonRemove} 
-                                onPress={handleRemoveFingerprint}
-                            >
-                                <Ionicons name="trash-outline" size={24} color="#f44336" />
-                                <Text style={styles.biometricButtonTextRemove}>Supprimer l'empreinte</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-                        <Text style={styles.registerButtonText}>S'inscrire</Text>
+                    <TouchableOpacity 
+                        style={[styles.registerButton, isLoading && styles.disabledButton]} 
+                        onPress={handleRegister}
+                        disabled={isLoading}
+                    >
+                        <Text style={styles.registerButtonText}>
+                            {isLoading ? 'Inscription en cours...' : 'S\'inscrire'}
+                        </Text>
                     </TouchableOpacity>
 
                     <View style={styles.dividerContainer}>
@@ -258,7 +186,11 @@ const RegisterScreen: React.FC = () => {
                         <View style={styles.divider} />
                     </View>
 
-                    <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
+                    <TouchableOpacity 
+                        style={styles.googleButton} 
+                        onPress={handleGoogleSignIn}
+                        disabled={isLoading}
+                    >
                         <Ionicons name="logo-google" size={24} color="#fff" style={styles.googleIcon} />
                         <Text style={styles.googleButtonText}>Continuer avec Google</Text>
                     </TouchableOpacity>
@@ -329,43 +261,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#333',
     },
-    biometricContainer: {
-        width: '100%',
-        marginBottom: 20,
-    },
-    biometricButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#FFF0F5',
-        padding: 15,
-        borderRadius: 12,
-        marginBottom: 10,
-    },
-    biometricButtonSuccess: {
-        backgroundColor: '#4CAF50',
-    },
-    biometricButtonText: {
-        marginLeft: 10,
-        fontSize: 16,
-        color: '#D81B60',
-    },
-    biometricButtonTextSuccess: {
-        color: '#fff',
-    },
-    biometricButtonRemove: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#FFF0F5',
-        padding: 15,
-        borderRadius: 12,
-    },
-    biometricButtonTextRemove: {
-        marginLeft: 10,
-        fontSize: 16,
-        color: '#f44336',
-    },
     registerButton: {
         backgroundColor: '#D81B60',
         padding: 15,
@@ -373,6 +268,9 @@ const styles = StyleSheet.create({
         width: '100%',
         alignItems: 'center',
         marginBottom: 20,
+    },
+    disabledButton: {
+        backgroundColor: '#999',
     },
     registerButtonText: {
         color: '#fff',

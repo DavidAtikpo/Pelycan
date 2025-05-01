@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Linkin
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiService, { Don } from '../services/api';
+import apiService, { Don } from '../../../services/api';
 
 const SupportScreen: React.FC = () => {
     const [message, setMessage] = useState('');

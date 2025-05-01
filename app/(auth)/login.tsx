@@ -24,6 +24,9 @@ const LoginScreen: React.FC = () => {
   // Vérifier la disponibilité de l'authentification biométrique au chargement
   useEffect(() => {
     checkBiometricAvailability();
+    checkStoredData();
+    checkIfUserIsLoggedIn();
+    testAsyncStoragePersistence();
   }, []);
 
   const checkBiometricAvailability = async () => {
@@ -33,6 +36,132 @@ const LoginScreen: React.FC = () => {
       setBiometricAvailable(hasHardware && isEnrolled);
     } catch (error) {
       console.error('Erreur lors de la vérification biométrique:', error);
+    }
+  };
+
+  const checkStoredData = async () => {
+    try {
+      // Vérifier les données stockées individuellement
+      const storedEmail = await AsyncStorage.getItem('userEmail');
+      const storedToken = await AsyncStorage.getItem('userToken');
+      const storedRole = await AsyncStorage.getItem('userRole');
+      
+      console.log('Données stockées au chargement (individuelles):', {
+        email: storedEmail,
+        token: storedToken ? 'Présent' : 'Absent',
+        role: storedRole
+      });
+      
+      // Vérifier les données stockées en JSON
+      const storedUserData = await AsyncStorage.getItem('userData');
+      if (storedUserData) {
+        try {
+          const userData = JSON.parse(storedUserData);
+          console.log('Données stockées au chargement (JSON):', userData);
+          
+          // Si l'email individuel n'est pas disponible mais présent dans l'objet JSON
+          if (!storedEmail && userData.email) {
+            console.log('Récupération de l\'email depuis l\'objet JSON');
+            setEmail(userData.email);
+          }
+        } catch (error) {
+          console.error('Erreur lors du parsing des données JSON:', error);
+        }
+      } else {
+        console.log('Aucune donnée JSON stockée');
+      }
+      
+      if (storedEmail) {
+        setEmail(storedEmail);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification des données stockées:', error);
+    }
+  };
+
+  const checkIfUserIsLoggedIn = async () => {
+    try {
+      // Récupérer les données de l'utilisateur depuis l'objet JSON
+      const storedUserData = await AsyncStorage.getItem('userData');
+      
+      if (storedUserData) {
+        try {
+          const userData = JSON.parse(storedUserData);
+          console.log('Données utilisateur trouvées:', userData);
+
+          if (userData.token && userData.role) {
+            // Vérifier si le token est toujours valide
+            try {
+              const response = await fetch(`${API_URL}/auth/verify-token`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${userData.token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (response.ok) {
+                console.log('Token valide, redirection...');
+                // Rediriger l'utilisateur en fonction de son rôle
+                switch (userData.role) {
+                  case 'admin':
+                    router.replace('/(admin)/DashboardScreen');
+                    break;
+                  case 'pro':
+                    router.replace('/(pro)/DashboardScreen');
+                    break;
+                  default:
+                    router.replace('/(app)/HomeScreen');
+                }
+              } else {
+                // Token invalide, supprimer les données stockées
+                console.log('Token invalide, suppression des données...');
+                await AsyncStorage.removeItem('userData');
+                await AsyncStorage.removeItem('userToken');
+                await AsyncStorage.removeItem('userRole');
+                await AsyncStorage.removeItem('userEmail');
+              }
+            } catch (error) {
+              console.error('Erreur lors de la vérification du token:', error);
+              // En cas d'erreur réseau, supprimer les données stockées
+              await AsyncStorage.removeItem('userData');
+              await AsyncStorage.removeItem('userToken');
+              await AsyncStorage.removeItem('userRole');
+              await AsyncStorage.removeItem('userEmail');
+            }
+          }
+        } catch (error) {
+          console.error('Erreur lors du parsing des données JSON:', error);
+          // En cas d'erreur, supprimer les données stockées
+          await AsyncStorage.removeItem('userData');
+          await AsyncStorage.removeItem('userToken');
+          await AsyncStorage.removeItem('userRole');
+          await AsyncStorage.removeItem('userEmail');
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification de la connexion:', error);
+    }
+  };
+
+  // Fonction pour tester la persistance d'AsyncStorage
+  const testAsyncStoragePersistence = async () => {
+    try {
+      // Vérifier si le test a déjà été effectué
+      const testKey = 'asyncStorageTest';
+      const testValue = await AsyncStorage.getItem(testKey);
+      
+      if (!testValue) {
+        // Premier lancement, stocker une valeur de test
+        const timestamp = new Date().toISOString();
+        await AsyncStorage.setItem(testKey, timestamp);
+        console.log('Test AsyncStorage: Valeur stockée:', timestamp);
+      } else {
+        // Valeur déjà stockée, afficher la valeur
+        console.log('Test AsyncStorage: Valeur récupérée:', testValue);
+      }
+    } catch (error) {
+      console.error('Erreur lors du test de persistance AsyncStorage:', error);
     }
   };
 
@@ -60,14 +189,40 @@ const LoginScreen: React.FC = () => {
       console.log('Response data:', data);
 
       if (response.ok && data.data?.token) {
-        await AsyncStorage.multiSet([
+        // Stocker les données utilisateur individuellement
+        const userData: [string, string][] = [
           ['userToken', data.data.token],
           ['userRole', data.data.user.role],
           ['userId', data.data.user.id.toString()],
           ['userEmail', data.data.user.email],
           ['userName', data.data.user.fullName || ''],
           ['isFirstLaunch', 'false']
-        ]);
+        ];
+        
+        console.log('Stockage des données utilisateur:', userData);
+        
+        // Stocker chaque élément individuellement
+        for (const [key, value] of userData) {
+          await AsyncStorage.setItem(key, value);
+          console.log(`Stockage de ${key}:`, value);
+        }
+        
+        // Vérifier que l'email a bien été stocké
+        const storedEmail = await AsyncStorage.getItem('userEmail');
+        console.log('Email stocké après connexion:', storedEmail);
+        
+        // Stocker également les données dans un objet JSON
+        const userDataObject = {
+          token: data.data.token,
+          role: data.data.user.role,
+          id: data.data.user.id.toString(),
+          email: data.data.user.email,
+          fullName: data.data.user.fullName || '',
+          isFirstLaunch: false
+        };
+        
+        await AsyncStorage.setItem('userData', JSON.stringify(userDataObject));
+        console.log('Données utilisateur stockées en JSON:', userDataObject);
         
         switch (data.data.user.role) {
           case 'admin':
@@ -109,7 +264,30 @@ const LoginScreen: React.FC = () => {
         const storedEmail = await AsyncStorage.getItem('userEmail');
         console.log('Email stocké:', storedEmail);
 
-        if (!storedEmail) {
+        // Si l'email stocké n'est pas disponible, essayer de le récupérer depuis l'objet JSON
+        let emailToUse = storedEmail;
+        if (!emailToUse) {
+            const storedUserData = await AsyncStorage.getItem('userData');
+            if (storedUserData) {
+                try {
+                    const userData = JSON.parse(storedUserData);
+                    if (userData.email) {
+                        emailToUse = userData.email;
+                        console.log('Email récupéré depuis l\'objet JSON:', emailToUse);
+                    }
+                } catch (error) {
+                    console.error('Erreur lors du parsing des données JSON:', error);
+                }
+            }
+        }
+
+        // Si l'email n'est toujours pas disponible, utiliser l'email saisi
+        if (!emailToUse && email.trim() !== '') {
+            emailToUse = email;
+            console.log('Utilisation de l\'email saisi:', emailToUse);
+        }
+
+        if (!emailToUse) {
             Alert.alert('Erreur', 'Aucun compte trouvé. Veuillez vous connecter normalement d\'abord.');
             return;
         }
@@ -128,26 +306,50 @@ const LoginScreen: React.FC = () => {
 
             // Tenter la connexion biométrique
             console.log('Tentative de connexion à:', `${API_URL}/auth/biometric-login`);
+            console.log('Avec l\'email:', emailToUse);
+            
             const response = await fetch(`${API_URL}/auth/biometric-login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ email: storedEmail }),
+                body: JSON.stringify({ email: emailToUse }),
             });
 
             const data = await response.json();
             console.log('Réponse du serveur:', data);
 
             if (response.ok && data.data?.token) {
-                await AsyncStorage.multiSet([
+                // Stocker les données utilisateur individuellement
+                const userData: [string, string][] = [
                     ['userToken', data.data.token],
                     ['userRole', data.data.user.role],
                     ['userId', data.data.user.id.toString()],
                     ['userEmail', data.data.user.email],
                     ['userName', data.data.user.fullName || ''],
                     ['isFirstLaunch', 'false']
-                ]);
+                ];
+                
+                console.log('Stockage des données utilisateur après connexion biométrique:', userData);
+                
+                // Stocker chaque élément individuellement
+                for (const [key, value] of userData) {
+                    await AsyncStorage.setItem(key, value);
+                    console.log(`Stockage de ${key}:`, value);
+                }
+
+                // Stocker également les données dans un objet JSON
+                const userDataObject = {
+                    token: data.data.token,
+                    role: data.data.user.role,
+                    id: data.data.user.id.toString(),
+                    email: data.data.user.email,
+                    fullName: data.data.user.fullName || '',
+                    isFirstLaunch: false
+                };
+                
+                await AsyncStorage.setItem('userData', JSON.stringify(userDataObject));
+                console.log('Données utilisateur stockées en JSON après connexion biométrique:', userDataObject);
 
                 if (data.data.redirectPath) {
                     router.replace(data.data.redirectPath);
@@ -187,14 +389,36 @@ const LoginScreen: React.FC = () => {
         const data = await response.json();
 
         if (response.ok) {
-          await AsyncStorage.multiSet([
+          // Stocker les données utilisateur individuellement
+          const userData: [string, string][] = [
             ['userToken', data.data.token],
             ['userRole', data.data.user.role],
             ['userId', data.data.user.id.toString()],
             ['userEmail', data.data.user.email],
             ['userName', data.data.user.fullName || ''],
             ['isFirstLaunch', 'false']
-          ]);
+          ];
+          
+          console.log('Stockage des données utilisateur après connexion Google:', userData);
+          
+          // Stocker chaque élément individuellement
+          for (const [key, value] of userData) {
+            await AsyncStorage.setItem(key, value);
+            console.log(`Stockage de ${key}:`, value);
+          }
+
+          // Stocker également les données dans un objet JSON
+          const userDataObject = {
+            token: data.data.token,
+            role: data.data.user.role,
+            id: data.data.user.id.toString(),
+            email: data.data.user.email,
+            fullName: data.data.user.fullName || '',
+            isFirstLaunch: false
+          };
+          
+          await AsyncStorage.setItem('userData', JSON.stringify(userDataObject));
+          console.log('Données utilisateur stockées en JSON après connexion Google:', userDataObject);
 
           switch (data.data.user.role) {
             case 'admin':

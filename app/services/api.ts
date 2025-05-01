@@ -54,16 +54,32 @@ export interface Don {
 
 // Interface pour les demandes d'ajout de logement
 export interface DemandeAjoutLogement {
-  id?: string;
+  id: string;
   nom: string;
   prenom: string;
   telephone: string;
   email: string;
-  justificatif?: string;
+  justificatif: string;
   statut: 'en_attente' | 'approuvee' | 'refusee';
   dateCreation: Date;
   raisonDemande: string;
   estProprio: boolean;
+  informationsPersonnelles?: {
+    profession: string;
+    numeroPieceIdentite: string;
+    bulletinsSalaire: string[];
+    contratTravail: string[];
+    numeroDemandeLogement: string;
+    numeroDalo: string;
+    quittancesLoyer: string[];
+    justificatifPriseEnCharge: string[];
+    pieceIdentite: string[];
+    numeroSecu: string;
+    nombrePersonnes: string;
+    livretFamille: string[];
+    notificationCaf: string[];
+    accepteConditions: boolean;
+  };
 }
 
 // Interface pour les données d'un logement

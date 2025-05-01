@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, ActivityIndicator, Image, Modal } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../../config/api';
@@ -15,7 +15,7 @@ interface EmergencyRequest {
     userId: string;
     location: LocationData;
     timestamp: string;
-    type: 'ASSISTANCE PELYCAN' | 'MEDICAL' | 'GENERAL';
+    type: 'HEBERGEMENT' | 'ASSISTANCE' | 'LOGEMENT' | 'VIOLENCE' | 'GENERAL';
 }
 
 interface EmergencyHistory {
@@ -37,6 +37,9 @@ const DemandeUrgenceScreen: React.FC = () => {
     const [userId, setUserId] = useState<string | null>(null);
     const [history, setHistory] = useState<EmergencyHistory[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
+    const [showFirstAid, setShowFirstAid] = useState(false);
+    const [showSecurity, setShowSecurity] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -183,6 +186,119 @@ const DemandeUrgenceScreen: React.FC = () => {
         );
     };
 
+    const pelycanServices = [
+        { 
+            id: '1', 
+            name: 'Hébergement\nimmédiat', 
+            icon: 'home',
+            type: 'HEBERGEMENT'
+        },
+        { 
+            id: '2', 
+            name: 'Assistance\nPelycan', 
+            icon: 'people',
+            type: 'ASSISTANCE'
+        },
+        { 
+            id: '3', 
+            name: 'Logement', 
+            icon: 'business',
+            type: 'LOGEMENT'
+        },
+        { 
+            id: '4', 
+            name: 'Signaler un\ncas de violence', 
+            icon: 'warning',
+            type: 'VIOLENCE'
+        },
+    ];
+
+    const firstAidInstructions = [
+        "1. Gardez votre calme et évaluez la situation",
+        "2. Mettez-vous en sécurité",
+        "3. Appelez les secours si nécessaire",
+        "4. Restez avec la victime jusqu'à l'arrivée des secours",
+        "5. Ne déplacez pas la victime sauf en cas de danger immédiat",
+        "6. Suivez les instructions des opérateurs d'urgence"
+    ];
+
+    const securityInstructions = [
+        "1. Verrouillez toutes les portes et fenêtres",
+        "2. Gardez votre téléphone chargé et à portée de main",
+        "3. Ayez un plan d'évacuation",
+        "4. Identifiez les sorties de secours",
+        "5. Conservez une liste de contacts d'urgence",
+        "6. Signalez toute situation suspecte"
+    ];
+
+    const renderHistoryModal = () => (
+        <Modal
+            visible={showHistory}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setShowHistory(false)}
+        >
+            <View style={styles.modalContainer}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Historique des demandes</Text>
+                        <TouchableOpacity onPress={() => setShowHistory(false)}>
+                            <Ionicons name="close" size={24} color="#333" />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.modalScroll}>
+                        {loadingHistory ? (
+                            <ActivityIndicator size="large" color="#FF3B30" />
+                        ) : history.length > 0 ? (
+                            history.map((request) => (
+                                <View key={request.id} style={styles.historyItem}>
+                                    <View style={styles.historyHeader}>
+                                        <Text style={styles.historyType}>{request.request_type}</Text>
+                                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(request.status) }]}>
+                                            <Text style={styles.statusText}>{getStatusText(request.status)}</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={styles.historyDate}>
+                                        {new Date(request.created_at).toLocaleString('fr-FR')}
+                                    </Text>
+                                </View>
+                            ))
+                        ) : (
+                            <Text style={styles.noHistoryText}>Aucun historique disponible</Text>
+                        )}
+                    </ScrollView>
+                </View>
+            </View>
+        </Modal>
+    );
+
+    const renderInstructionsModal = (visible: boolean, setVisible: (v: boolean) => void, title: string, instructions: string[]) => (
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setVisible(false)}
+        >
+            <View style={styles.modalContainer}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>{title}</Text>
+                        <TouchableOpacity onPress={() => setVisible(false)}>
+                            <Ionicons name="close" size={24} color="#333" />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.modalScroll}>
+                        {instructions.map((instruction, index) => (
+                            <View key={index} style={styles.instructionItem}>
+                                <Text style={styles.instructionText}>{instruction}</Text>
+                            </View>
+                        ))}
+                    </ScrollView>
+                </View>
+            </View>
+        </Modal>
+    );
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -194,146 +310,100 @@ const DemandeUrgenceScreen: React.FC = () => {
 
     return (
         <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                <View style={styles.headerContent}>
-                    <MaterialIcons name="emergency" size={40} color="#FF0000" />
-                    <Text style={styles.title}>Demande d'Urgence</Text>
-                    <Text style={styles.subtitle}>Services d'urgence disponibles 24h/24</Text>
-                    {location && (
-                        <View style={styles.locationContainer}>
-                            <Ionicons name="location" size={20} color="#4CAF50" />
-                            <Text style={styles.locationText}>
-                                Localisation activée
-                            </Text>
-                        </View>
-                    )}
+            {/* Header Rouge avec localisation */}
+            <View style={styles.redHeader}>
+                <View style={styles.headerTop}>
+                    <Ionicons name="warning" size={24} color="white" />
+                    <Text style={styles.headerText}>URGENCE</Text>
                 </View>
-            </View>
-
-            <View style={styles.emergencySection}>
-                <TouchableOpacity 
-                    style={styles.sosButton}
-                    onPress={() => handleEmergencyCall('17', 'ASSISTANCE PELYCAN')}
-                >
-                    <View style={styles.sosButtonContent}>
-                        <FontAwesome5 name="exclamation-triangle" size={30} color="#fff" />
-                        <Text style={styles.sosButtonText}>ASSISTANCE PELYCAN</Text>
-                    </View>
-                </TouchableOpacity>
-
-                <View style={styles.emergencyContacts}>
-                    <Text style={styles.contactsTitle}>Numéros d'Urgence:</Text>
-                    <View style={styles.contactsGrid}>
-                        <TouchableOpacity 
-                            style={styles.contactButton}
-                            onPress={() => handleEmergencyCall('15', 'MEDICAL')}
-                        >
-                            <View style={styles.contactButtonContent}>
-                                <MaterialIcons name="medical-services" size={24} color="#D81B60" />
-                                <Text style={styles.contactText}>PSYCHOLOGUE: 15</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
-
-            <View style={styles.historySection}>
-                <View style={styles.sectionHeader}>
-                    <MaterialIcons name="history" size={24} color="#333" />
-                    <Text style={styles.sectionTitle}>Historique des demandes</Text>
-                </View>
-                {loadingHistory ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="small" color="#FF0000" />
-                    </View>
-                ) : history.length > 0 ? (
-                    history.map((request) => (
-                        <View key={request.id} style={styles.historyItem}>
-                            <View style={styles.historyHeader}>
-                                <View style={styles.historyTypeContainer}>
-                                    <MaterialIcons 
-                                        name={request.request_type === 'MEDICAL' ? 'medical-services' : 
-                                            request.request_type === 'ASSISTANCE PELYCAN' ? 'local-police' : 'help'}
-                                        size={24} 
-                                        color="#333" 
-                                    />
-                                    <Text style={styles.historyType}>{request.request_type}</Text>
-                                </View>
-                                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(request.status) }]}>
-                                    <Text style={styles.statusText}>{getStatusText(request.status)}</Text>
-                                </View>
-                            </View>
-                            <Text style={styles.historyDate}>
-                                {new Date(request.created_at).toLocaleString('fr-FR')}
-                            </Text>
-                            {request.logs && request.logs.length > 0 && (
-                                <View style={styles.logsContainer}>
-                                    {request.logs.map((log) => (
-                                        <View key={log.id} style={styles.logItem}>
-                                            <View style={styles.logContent}>
-                                                <MaterialIcons 
-                                                    name={log.action === 'created' ? 'add-circle' : 
-                                                          log.action === 'status_updated' ? 'update' : 'info'}
-                                                    size={16} 
-                                                    color="#666" 
-                                                />
-                                                <Text style={styles.logAction}>{log.action}</Text>
-                                            </View>
-                                            <Text style={styles.logDate}>
-                                                {new Date(log.created_at).toLocaleString('fr-FR')}
-                                            </Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
-                        </View>
-                    ))
-                ) : (
-                    <View style={styles.noHistoryContainer}>
-                        <MaterialIcons name="history" size={40} color="#ccc" />
-                        <Text style={styles.noHistoryText}>Aucune demande d'urgence enregistrée</Text>
+                {location && (
+                    <View style={styles.locationStatus}>
+                        <Ionicons name="location" size={16} color="white" />
+                        <Text style={styles.locationStatusText}>Localisation active</Text>
                     </View>
                 )}
             </View>
 
-            <View style={styles.infoSection}>
-                <View style={styles.sectionHeader}>
-                    <MaterialIcons name="info" size={24} color="#333" />
-                    <Text style={styles.sectionTitle}>Que faire en cas d'urgence ?</Text>
+            {/* Bouton d'appel d'urgence principal */}
+            <TouchableOpacity 
+                style={styles.mainEmergencyButton}
+                onPress={() => handleEmergencyCall('112', 'GENERAL')}
+            >
+                <Ionicons name="call" size={32} color="white" />
+                <View>
+                    <Text style={styles.mainEmergencyText}>Appeler les secours</Text>
+                    <Text style={styles.emergencyNumber}></Text>
                 </View>
-                <View style={styles.infoSteps}>
-                    <View style={styles.infoStep}>
-                        <View style={styles.stepNumber}>
-                            <Text style={styles.stepNumberText}>1</Text>
-                        </View>
-                        <Text style={styles.infoText}>Restez calme</Text>
-                    </View>
-                    <View style={styles.infoStep}>
-                        <View style={styles.stepNumber}>
-                            <Text style={styles.stepNumberText}>2</Text>
-                        </View>
-                        <Text style={styles.infoText}>Mettez-vous en sécurité</Text>
-                    </View>
-                    <View style={styles.infoStep}>
-                        <View style={styles.stepNumber}>
-                            <Text style={styles.stepNumberText}>3</Text>
-                        </View>
-                        <Text style={styles.infoText}>Contactez les services d'urgence</Text>
-                    </View>
-                    <View style={styles.infoStep}>
-                        <View style={styles.stepNumber}>
-                            <Text style={styles.stepNumberText}>4</Text>
-                        </View>
-                        <Text style={styles.infoText}>Votre localisation sera automatiquement partagée</Text>
-                    </View>
-                    <View style={styles.infoStep}>
-                        <View style={styles.stepNumber}>
-                            <Text style={styles.stepNumberText}>5</Text>
-                        </View>
-                        <Text style={styles.infoText}>Suivez les instructions des opérateurs</Text>
-                    </View>
-                </View>
+            </TouchableOpacity>
+
+            {/* Grille des services Pelycan */}
+            <View style={styles.servicesGrid}>
+                {pelycanServices.map((service) => (
+                    <TouchableOpacity 
+                        key={service.id}
+                        style={styles.serviceCard}
+                        onPress={() => handleEmergencyCall('112', service.type as EmergencyRequest['type'])}
+                    >
+                        <Ionicons name={service.icon as any} size={24} color="#FF3B30" />
+                        <Text style={styles.serviceName}>{service.name}</Text>
+                    </TouchableOpacity>
+                ))}
             </View>
+
+            {/* Section Position actuelle */}
+            {location && (
+                <View style={styles.locationSection}>
+                    <View style={styles.locationHeader}>
+                        <Ionicons name="location" size={24} color="#FF3B30" />
+                        <Text style={styles.locationTitle}>Votre Position</Text>
+                        <TouchableOpacity style={styles.shareButton}>
+                            <Text style={styles.shareButtonText}>Partager</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={styles.locationAddress}>
+                        {`Latitude: ${location.latitude.toFixed(6)}\nLongitude: ${location.longitude.toFixed(6)}`}
+                    </Text>
+                </View>
+            )}
+
+            {/* Boutons d'information */}
+            <View style={styles.infoButtonsContainer}>
+                <TouchableOpacity 
+                    style={styles.infoButton}
+                    onPress={() => setShowHistory(true)}
+                >
+                    <Ionicons name="time" size={24} color="#FF3B30" />
+                    <Text style={styles.infoButtonText}>Historique</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                    style={styles.infoButton}
+                    onPress={() => setShowFirstAid(true)}
+                >
+                    <FontAwesome5 name="first-aid" size={24} color="#FF3B30" />
+                    <Text style={styles.infoButtonText}>Premiers Secours</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                    style={styles.infoButton}
+                    onPress={() => setShowSecurity(true)}
+                >
+                    <Ionicons name="shield-checkmark" size={24} color="#FF3B30" />
+                    <Text style={styles.infoButtonText}>Consignes de Sécurité</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Message d'information */}
+            <View style={styles.infoMessage}>
+                <Text style={styles.infoMessageText}>
+                    En cas d'urgence, restez calme et donnez des informations précises sur votre situation et votre localisation.
+                </Text>
+            </View>
+
+            {/* Modals */}
+            {renderHistoryModal()}
+            {renderInstructionsModal(showFirstAid, setShowFirstAid, "Premiers Secours", firstAidInstructions)}
+            {renderInstructionsModal(showSecurity, setShowSecurity, "Consignes de Sécurité", securityInstructions)}
         </ScrollView>
     );
 };
@@ -343,219 +413,142 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5F5F5',
     },
-    header: {
-        backgroundColor: '#fff',
-        paddingTop: 40,
-        paddingBottom: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+    redHeader: {
+        backgroundColor: '#FF3B30',
+        padding: 20,
     },
-    headerContent: {
-        alignItems: 'center',
-        paddingHorizontal: 20,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#333',
-        marginTop: 10,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginTop: 5,
-    },
-    locationContainer: {
+    headerTop: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#E8F5E9',
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginTop: 10,
-    },
-    locationText: {
-        fontSize: 14,
-        color: '#4CAF50',
-        marginLeft: 5,
-    },
-    emergencySection: {
-        padding: 20,
-        backgroundColor: '#fff',
-        marginTop: 10,
-    },
-    sosButton: {
-        backgroundColor: '#FF0000',
-        padding: 20,
-        borderRadius: 15,
-        alignItems: 'center',
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-    },
-    sosButtonContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    sosButtonText: {
-        color: '#fff',
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginLeft: 10,
-    },
-    emergencyContacts: {
-        marginTop: 20,
-    },
-    contactsTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 15,
-        color: '#333',
-    },
-    contactsGrid: {
         gap: 10,
     },
-    contactButton: {
-        backgroundColor: '#fff',
-        padding: 15,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#eee',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1.41,
-    },
-    contactButtonContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    contactText: {
-        fontSize: 16,
-        color: '#D81B60',
-        marginLeft: 10,
-    },
-    historySection: {
-        padding: 20,
-        backgroundColor: '#fff',
-        marginTop: 10,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 15,
-    },
-    sectionTitle: {
+    headerText: {
+        color: 'white',
         fontSize: 20,
         fontWeight: 'bold',
-        marginLeft: 10,
-        color: '#333',
     },
-    historyItem: {
-        backgroundColor: '#f8f8f8',
+    locationStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginTop: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 15,
+    },
+    locationStatusText: {
+        color: 'white',
+        fontSize: 14,
+    },
+    mainEmergencyButton: {
+        backgroundColor: '#FF3B30',
+        margin: 15,
+        padding: 20,
+        borderRadius: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 15,
+    },
+    mainEmergencyText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    emergencyNumber: {
+        color: 'white',
+        fontSize: 16,
+    },
+    servicesGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        padding: 15,
+        gap: 15,
+    },
+    serviceCard: {
+        backgroundColor: 'white',
+        width: '47%',
         padding: 15,
         borderRadius: 10,
-        marginBottom: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        aspectRatio: 1,
         elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 1.41,
     },
-    historyHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 5,
-    },
-    historyTypeContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    historyType: {
+    serviceName: {
         fontSize: 16,
-        fontWeight: 'bold',
+        fontWeight: '500',
+        marginTop: 10,
+        textAlign: 'center',
         color: '#333',
-        marginLeft: 8,
     },
-    statusBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 15,
+    locationSection: {
+        backgroundColor: 'white',
+        margin: 15,
+        padding: 15,
+        borderRadius: 10,
     },
-    statusText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    historyDate: {
-        fontSize: 14,
-        color: '#666',
+    locationHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 10,
     },
-    logsContainer: {
-        marginTop: 10,
-        borderTopWidth: 1,
-        borderTopColor: '#eee',
-        paddingTop: 10,
+    locationTitle: {
+        fontSize: 16,
+        fontWeight: '500',
+        flex: 1,
+        marginLeft: 10,
     },
-    logItem: {
-        marginBottom: 8,
+    shareButton: {
+        backgroundColor: '#FF3B30',
+        paddingHorizontal: 15,
+        paddingVertical: 5,
+        borderRadius: 15,
     },
-    logContent: {
+    shareButtonText: {
+        color: 'white',
+        fontSize: 14,
+    },
+    locationAddress: {
+        fontSize: 14,
+        color: '#666',
+    },
+    infoButtonsContainer: {
+        flexDirection: 'column',
+        padding: 15,
+        gap: 10,
+    },
+    infoButton: {
+        backgroundColor: 'white',
         flexDirection: 'row',
         alignItems: 'center',
-    },
-    logAction: {
-        fontSize: 14,
-        color: '#444',
-        marginLeft: 8,
-    },
-    logDate: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 2,
-        marginLeft: 24,
-    },
-    noHistoryContainer: {
-        alignItems: 'center',
-        padding: 20,
-    },
-    noHistoryText: {
-        textAlign: 'center',
-        color: '#666',
-        fontSize: 16,
-        marginTop: 10,
-    },
-    infoSection: {
-        padding: 20,
-        backgroundColor: '#fff',
-        marginTop: 10,
-        marginBottom: 20,
-    },
-    infoSteps: {
+        padding: 15,
+        borderRadius: 10,
         gap: 15,
     },
-    infoStep: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    stepNumber: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: '#FF0000',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 10,
-    },
-    infoText: {
+    infoButtonText: {
         fontSize: 16,
-        color: '#555',
-        flex: 1,
+        color: '#333',
+        fontWeight: '500',
+    },
+    infoMessage: {
+        backgroundColor: '#FFF3F3',
+        margin: 15,
+        padding: 15,
+        borderRadius: 10,
+        borderLeftWidth: 4,
+        borderLeftColor: '#FF3B30',
+    },
+    infoMessageText: {
+        fontSize: 14,
+        color: '#666',
+        fontStyle: 'italic',
     },
     loadingContainer: {
         padding: 20,
@@ -566,10 +559,80 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
     },
-    stepNumberText: {
-        color: '#fff',
-        fontSize: 14,
+    modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '80%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    modalTitle: {
+        fontSize: 20,
         fontWeight: 'bold',
+        color: '#333',
+    },
+    modalScroll: {
+        padding: 20,
+    },
+    historyItem: {
+        backgroundColor: '#f8f8f8',
+        padding: 15,
+        borderRadius: 10,
+        marginBottom: 10,
+    },
+    historyHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    historyType: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#333',
+    },
+    statusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 15,
+    },
+    statusText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    historyDate: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 5,
+    },
+    noHistoryText: {
+        textAlign: 'center',
+        color: '#666',
+        fontSize: 16,
+        padding: 20,
+    },
+    instructionItem: {
+        backgroundColor: '#f8f8f8',
+        padding: 15,
+        borderRadius: 10,
+        marginBottom: 10,
+    },
+    instructionText: {
+        fontSize: 16,
+        color: '#333',
+        lineHeight: 24,
     },
 });
 

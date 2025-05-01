@@ -46,6 +46,9 @@ const MessagerieScreen: React.FC = () => {
     const [userId, setUserId] = useState<string | null>(null);
     const [showProfessionals, setShowProfessionals] = useState(true);
     const [sendingMessage, setSendingMessage] = useState(false);
+    const [incomingCall, setIncomingCall] = useState<boolean>(false);
+    const [callerName, setCallerName] = useState<string>('');
+    const [callStatus, setCallStatus] = useState<'none' | 'incoming' | 'ongoing' | 'ended'>('none');
 
     useEffect(() => {
         const initializeData = async () => {
@@ -421,6 +424,79 @@ const MessagerieScreen: React.FC = () => {
         </TouchableOpacity>
     );
 
+    const handleVideoCall = () => {
+        // Vérifier si l'utilisateur est un professionnel
+        const isProfessional = selectedConversation?.participant_type === 'professional';
+        
+        if (isProfessional) {
+            // Si l'utilisateur est un professionnel, il peut lancer l'appel
+            Alert.alert(
+                'Appel vidéo',
+                'Voulez-vous lancer un appel vidéo ?',
+                [
+                    { text: 'Annuler', style: 'cancel' },
+                    { 
+                        text: 'Lancer l\'appel', 
+                        onPress: () => {
+                            // Logique pour lancer l'appel vidéo
+                            Alert.alert('Information', 'Fonctionnalité d\'appel vidéo en cours de développement');
+                        }
+                    }
+                ]
+            );
+        } else {
+            // Si l'utilisateur n'est pas un professionnel, il ne peut pas lancer l'appel
+            Alert.alert(
+                'Appel vidéo',
+                'Seuls les professionnels peuvent lancer des appels vidéo. Vous pouvez recevoir des appels vidéo de la part des professionnels.',
+                [{ text: 'OK' }]
+            );
+        }
+    };
+
+    // Fonction pour simuler la réception d'un appel vidéo
+    const handleIncomingCall = () => {
+        if (selectedConversation) {
+            setIncomingCall(true);
+            setCallStatus('incoming');
+            setCallerName(selectedConversation.participant_name);
+            
+            Alert.alert(
+                'Appel vidéo entrant',
+                `${selectedConversation.participant_name} vous appelle en vidéo`,
+                [
+                    { 
+                        text: 'Refuser', 
+                        style: 'cancel',
+                        onPress: () => {
+                            setIncomingCall(false);
+                            setCallStatus('none');
+                        }
+                    },
+                    { 
+                        text: 'Accepter', 
+                        onPress: () => {
+                            setCallStatus('ongoing');
+                            // Logique pour accepter l'appel vidéo
+                            Alert.alert('Information', 'Fonctionnalité d\'appel vidéo en cours de développement');
+                            setTimeout(() => {
+                                setCallStatus('ended');
+                                setIncomingCall(false);
+                            }, 3000);
+                        }
+                    }
+                ]
+            );
+        }
+    };
+
+    // Fonction pour terminer un appel en cours
+    const handleEndCall = () => {
+        setCallStatus('ended');
+        setIncomingCall(false);
+        Alert.alert('Information', 'Appel terminé');
+    };
+
     return (
         <View style={styles.container}>
             {loading ? (
@@ -448,10 +524,60 @@ const MessagerieScreen: React.FC = () => {
                                     />
                                     <Text style={styles.chatTitle}>{selectedConversation.participant_name}</Text>
                                 </View>
+                                <TouchableOpacity 
+                                    style={styles.videoCallButton}
+                                    onPress={handleVideoCall}
+                                >
+                                    <MaterialIcons 
+                                        name="videocam" 
+                                        size={24} 
+                                        color={selectedConversation.participant_type === 'professional' ? "#D81B60" : "#999"} 
+                                    />
+                                </TouchableOpacity>
                                 <TouchableOpacity onPress={handleReport}>
                                     <MaterialIcons name="report-problem" size={24} color="#D81B60" />
                                 </TouchableOpacity>
                             </View>
+
+                            {/* Indicateur d'appel */}
+                            {callStatus !== 'none' && (
+                                <View style={[
+                                    styles.callIndicator,
+                                    callStatus === 'incoming' && styles.incomingCallIndicator,
+                                    callStatus === 'ongoing' && styles.ongoingCallIndicator
+                                ]}>
+                                    <MaterialIcons 
+                                        name={callStatus === 'incoming' ? "videocam" : "call"} 
+                                        size={20} 
+                                        color="#fff" 
+                                    />
+                                    <Text style={styles.callIndicatorText}>
+                                        {callStatus === 'incoming' 
+                                            ? `Appel entrant de ${callerName}`
+                                            : callStatus === 'ongoing'
+                                                ? `Appel en cours avec ${callerName}`
+                                                : 'Appel terminé'}
+                                    </Text>
+                                    {callStatus === 'ongoing' && (
+                                        <TouchableOpacity 
+                                            style={styles.endCallButton}
+                                            onPress={handleEndCall}
+                                        >
+                                            <MaterialIcons name="call-end" size={20} color="#fff" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            )}
+
+                            {/* Bouton pour simuler un appel entrant (à supprimer en production) */}
+                            {selectedConversation.participant_type === 'professional' && (
+                                <TouchableOpacity 
+                                    style={styles.simulateCallButton}
+                                    onPress={handleIncomingCall}
+                                >
+                                    <Text style={styles.simulateCallText}>Simuler un appel entrant</Text>
+                                </TouchableOpacity>
+                            )}
 
                             <FlatList
                                 data={messages}
@@ -502,7 +628,7 @@ const MessagerieScreen: React.FC = () => {
                                     <Text style={[
                                         styles.sectionTabText,
                                         showProfessionals && styles.sectionTabActive
-                                    ]}>Professionnels</Text>
+                                    ]}>Assistants Pélycan</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity 
                                     style={styles.sectionTab}
@@ -510,7 +636,7 @@ const MessagerieScreen: React.FC = () => {
                                 >
                                     <Text style={[
                                         styles.sectionTabText,
-                                        !showProfessionals && styles.sectionTabActive
+                                         !showProfessionals && styles.sectionTabActive
                                     ]}>Conversations</Text>
                                 </TouchableOpacity>
                             </View>
@@ -804,6 +930,72 @@ const styles = StyleSheet.create({
     },
     professionalsList: {
         padding: 15,
+    },
+    videoCallButton: {
+        marginRight: 10,
+    },
+    incomingCallContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    incomingCallText: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    incomingCallButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    callButton: {
+        padding: 10,
+        borderRadius: 12,
+        marginLeft: 10,
+    },
+    rejectButton: {
+        backgroundColor: '#D81B60',
+    },
+    acceptButton: {
+        backgroundColor: '#D81B60',
+    },
+    simulateCallButton: {
+        padding: 10,
+        borderRadius: 12,
+        marginTop: 10,
+        backgroundColor: '#D81B60',
+    },
+    simulateCallText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#fff',
+    },
+    callIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    incomingCallIndicator: {
+        backgroundColor: '#D81B60',
+    },
+    ongoingCallIndicator: {
+        backgroundColor: '#FF69B4',
+    },
+    callIndicatorText: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#fff',
+    },
+    endCallButton: {
+        padding: 10,
+        borderRadius: 12,
+        marginLeft: 10,
     },
 });
 

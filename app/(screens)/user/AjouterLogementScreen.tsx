@@ -13,9 +13,34 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiService, { DemandeAjoutLogement, Logement } from '../services/api';
+import apiService, { DemandeAjoutLogement, Logement } from '../../services/api';
 import { useRouter } from 'expo-router';
-import { API_URL } from '../../config/api';
+import { API_URL } from '../../../config/api';
+import * as ImagePicker from 'expo-image-picker';
+
+// Modifier l'interface InformationsPersonnelles
+interface InformationsPersonnelles {
+    profession: string;
+    numeroPieceIdentite: string;
+    bulletinsSalaire: string[];
+    contratTravail: string[];
+    numeroDemandeLogement: string;
+    numeroDalo: string;
+    quittancesLoyer: string[];
+    justificatifPriseEnCharge: string[];
+    pieceIdentite: string[];
+    numeroSecu: string;
+    nombrePersonnes: string;
+    livretFamille: string[];
+    notificationCaf: string[];
+    accepteConditions: boolean;
+}
+
+// Modifier l'interface LogementFormData
+interface LogementFormData {
+    // ... existing code ...
+    informationsPersonnelles: InformationsPersonnelles;
+}
 
 const AjouterLogementScreen: React.FC = () => {
     const router = useRouter();
@@ -35,6 +60,22 @@ const AjouterLogementScreen: React.FC = () => {
     const [donneesStockees, setDonneesStockees] = useState(false);
     const [logementLocal, setLogementLocal] = useState<Logement | null>(null);
     const [showLogementDetails, setShowLogementDetails] = useState(false);
+    const [informationsPersonnelles, setInformationsPersonnelles] = useState<InformationsPersonnelles>({
+        profession: '',
+        numeroPieceIdentite: '',
+        bulletinsSalaire: [],
+        contratTravail: [],
+        numeroDemandeLogement: '',
+        numeroDalo: '',
+        quittancesLoyer: [],
+        justificatifPriseEnCharge: [],
+        pieceIdentite: [],
+        numeroSecu: '',
+        nombrePersonnes: '',
+        livretFamille: [],
+        notificationCaf: [],
+        accepteConditions: false
+    });
 
     // Valider le formulaire de la première étape
     const validerFormulaireEtape1 = () => {
@@ -81,6 +122,74 @@ const AjouterLogementScreen: React.FC = () => {
             return false;
         }
         
+        // Validation des informations personnelles
+        if (estProprio) {
+            if (!informationsPersonnelles.profession.trim()) {
+                Alert.alert('Champ manquant', 'Veuillez indiquer votre profession.');
+                return false;
+            }
+
+            if (informationsPersonnelles.bulletinsSalaire.length < 3) {
+                Alert.alert('Documents manquants', 'Veuillez fournir vos 3 derniers bulletins de salaire.');
+                return false;
+            }
+
+            if (informationsPersonnelles.contratTravail.length === 0) {
+                Alert.alert('Document manquant', 'Veuillez fournir votre contrat de travail.');
+                return false;
+            }
+
+            if (!informationsPersonnelles.numeroDemandeLogement.trim()) {
+                Alert.alert('Champ manquant', 'Veuillez indiquer votre numéro de demande de logement social.');
+                return false;
+            }
+
+            if (!informationsPersonnelles.numeroDalo.trim()) {
+                Alert.alert('Champ manquant', 'Veuillez indiquer votre numéro DALO ou justifier votre demande prioritaire.');
+                return false;
+            }
+
+            if (informationsPersonnelles.quittancesLoyer.length < 3) {
+                Alert.alert('Documents manquants', 'Veuillez fournir vos 3 derniers mois de quittances de loyer.');
+                return false;
+            }
+
+            if (informationsPersonnelles.justificatifPriseEnCharge.length === 0) {
+                Alert.alert('Document manquant', 'Veuillez fournir le justificatif de prise en charge par une association.');
+                return false;
+            }
+
+            if (informationsPersonnelles.pieceIdentite.length === 0) {
+                Alert.alert('Document manquant', 'Veuillez fournir une copie de votre pièce d\'identité.');
+                return false;
+            }
+
+            if (!informationsPersonnelles.numeroSecu.trim()) {
+                Alert.alert('Champ manquant', 'Veuillez indiquer votre numéro de sécurité sociale.');
+                return false;
+            }
+
+            if (!informationsPersonnelles.nombrePersonnes.trim()) {
+                Alert.alert('Champ manquant', 'Veuillez indiquer le nombre de personnes occupant le logement.');
+                return false;
+            }
+
+            if (informationsPersonnelles.livretFamille.length === 0) {
+                Alert.alert('Document manquant', 'Veuillez fournir une copie de votre livret de famille.');
+                return false;
+            }
+
+            if (informationsPersonnelles.notificationCaf.length === 0) {
+                Alert.alert('Document manquant', 'Veuillez fournir votre notification CAF ou votre relevé de situation.');
+                return false;
+            }
+
+            if (!informationsPersonnelles.accepteConditions) {
+                Alert.alert('Conditions non acceptées', 'Veuillez accepter les conditions d\'utilisation et la politique de confidentialité.');
+                return false;
+            }
+        }
+
         return true;
     };
 
@@ -126,7 +235,8 @@ const AjouterLogementScreen: React.FC = () => {
                 statut: 'en_attente',
                 dateCreation: new Date(),
                 raisonDemande,
-                estProprio
+                estProprio,
+                informationsPersonnelles: estProprio ? informationsPersonnelles : undefined
             };
             
             // Envoyer la demande à l'API
@@ -357,6 +467,12 @@ const AjouterLogementScreen: React.FC = () => {
                         setRaisonDemande(data.raisonDemande);
                         setEstProprio(data.estProprio);
                         setStatut(data.statut);
+                        if (data.informationsPersonnelles) {
+                            setInformationsPersonnelles({
+                                ...data.informationsPersonnelles,
+                                numeroPieceIdentite: data.informationsPersonnelles.numeroPieceIdentite || ''
+                            });
+                        }
 
                         // Si la demande est approuvée, vérifier s'il y a un logement local
                         if (data.statut === 'approuvee') {
@@ -393,6 +509,12 @@ const AjouterLogementScreen: React.FC = () => {
                     setEstProprio(demande.estProprio);
                     setDemandeEnvoyee(true);
                     setStatut(demande.statut);
+                    if (demande.informationsPersonnelles) {
+                        setInformationsPersonnelles({
+                            ...demande.informationsPersonnelles,
+                            numeroPieceIdentite: demande.informationsPersonnelles.numeroPieceIdentite || ''
+                        });
+                    }
                 }
             } catch (localError) {
                 console.error('Erreur lors de la vérification locale:', localError);
@@ -401,6 +523,60 @@ const AjouterLogementScreen: React.FC = () => {
         
         verifierDemande();
     }, []);
+
+    // Ajouter la fonction pour gérer les documents
+    const ajouterDocument = async (type: keyof InformationsPersonnelles, sourceType: 'camera' | 'library') => {
+        try {
+            if (sourceType === 'camera') {
+                const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Permission refusée', 'Nous avons besoin de votre autorisation pour accéder à l\'appareil photo.');
+                    return;
+                }
+            } else {
+                const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Permission refusée', 'Nous avons besoin de votre autorisation pour accéder à vos photos.');
+                    return;
+                }
+            }
+
+            const result = await (sourceType === 'camera' 
+                ? ImagePicker.launchCameraAsync({
+                    allowsEditing: true,
+                    aspect: [4, 3],
+                    quality: 0.8,
+                }) 
+                : ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    allowsEditing: true,
+                    aspect: [4, 3],
+                    quality: 0.8,
+                }));
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setInformationsPersonnelles(prev => ({
+                    ...prev,
+                    [type]: Array.isArray(prev[type]) 
+                        ? [...(prev[type] as string[]), result.assets[0].uri]
+                        : prev[type]
+                }));
+            }
+        } catch (error) {
+            console.error('Erreur lors de l\'ajout du document:', error);
+            Alert.alert('Erreur', 'Une erreur est survenue lors de l\'ajout du document.');
+        }
+    };
+
+    // Modifier la fonction supprimerDocument pour gérer correctement les types
+    const supprimerDocument = (type: keyof InformationsPersonnelles, index: number) => {
+        setInformationsPersonnelles(prev => ({
+            ...prev,
+            [type]: Array.isArray(prev[type]) 
+                ? (prev[type] as string[]).filter((_, i) => i !== index)
+                : prev[type]
+        }));
+    };
 
     // Afficher le statut de la demande
     if (demandeEnvoyee) {
@@ -655,6 +831,231 @@ const AjouterLogementScreen: React.FC = () => {
                         />
                     </View>
                     
+                    {estProprio && (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Vos informations personnelles</Text>
+                            
+                            <Text style={styles.label}>Profession <Text style={styles.requiredField}>*</Text></Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Votre profession"
+                                value={informationsPersonnelles.profession}
+                                onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, profession: value }))}
+                            />
+
+                            <Text style={styles.label}>Numéro de pièce d'identité <Text style={styles.requiredField}>*</Text></Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Numéro de votre carte de séjour/passeport/permis de conduire"
+                                value={informationsPersonnelles.numeroPieceIdentite}
+                                onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, numeroPieceIdentite: value }))}
+                            />
+
+                            <Text style={styles.label}>Bulletins de salaire (3 derniers mois) <Text style={styles.requiredField}>*</Text></Text>
+                            <View style={styles.documentButtons}>
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => ajouterDocument('bulletinsSalaire', 'library')}
+                                >
+                                    <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                    <Text style={styles.documentButtonText}>Ajouter</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {informationsPersonnelles.bulletinsSalaire.length > 0 && (
+                                <View style={styles.documentList}>
+                                    {informationsPersonnelles.bulletinsSalaire.map((doc, index) => (
+                                        <View key={index} style={styles.documentItem}>
+                                            <Text style={styles.documentText}>Bulletin {index + 1}</Text>
+                                            <TouchableOpacity onPress={() => supprimerDocument('bulletinsSalaire', index)}>
+                                                <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Text style={styles.label}>Contrat de travail <Text style={styles.requiredField}>*</Text></Text>
+                            <View style={styles.documentButtons}>
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => ajouterDocument('contratTravail', 'library')}
+                                >
+                                    <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                    <Text style={styles.documentButtonText}>Ajouter</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {informationsPersonnelles.contratTravail.length > 0 && (
+                                <View style={styles.documentList}>
+                                    {informationsPersonnelles.contratTravail.map((doc, index) => (
+                                        <View key={index} style={styles.documentItem}>
+                                            <Text style={styles.documentText}>Contrat {index + 1}</Text>
+                                            <TouchableOpacity onPress={() => supprimerDocument('contratTravail', index)}>
+                                                <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Text style={styles.label}>Numéro départemental de demande de logement social <Text style={styles.requiredField}>*</Text></Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Votre numéro de demande de logement social"
+                                value={informationsPersonnelles.numeroDemandeLogement}
+                                onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, numeroDemandeLogement: value }))}
+                            />
+
+                            <Text style={styles.label}>Numéro DALO ou justificatif de demande prioritaire <Text style={styles.requiredField}>*</Text></Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Votre numéro DALO ou justifiez votre demande prioritaire"
+                                value={informationsPersonnelles.numeroDalo}
+                                onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, numeroDalo: value }))}
+                            />
+
+                            <Text style={styles.label}>Quittances de loyer (3 derniers mois) <Text style={styles.requiredField}>*</Text></Text>
+                            <View style={styles.documentButtons}>
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => ajouterDocument('quittancesLoyer', 'library')}
+                                >
+                                    <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                    <Text style={styles.documentButtonText}>Ajouter</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {informationsPersonnelles.quittancesLoyer.length > 0 && (
+                                <View style={styles.documentList}>
+                                    {informationsPersonnelles.quittancesLoyer.map((doc, index) => (
+                                        <View key={index} style={styles.documentItem}>
+                                            <Text style={styles.documentText}>Quittance {index + 1}</Text>
+                                            <TouchableOpacity onPress={() => supprimerDocument('quittancesLoyer', index)}>
+                                                <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Text style={styles.label}>Justificatif de prise en charge par une association <Text style={styles.requiredField}>*</Text></Text>
+                            <View style={styles.documentButtons}>
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => ajouterDocument('justificatifPriseEnCharge', 'library')}
+                                >
+                                    <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                    <Text style={styles.documentButtonText}>Ajouter</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {informationsPersonnelles.justificatifPriseEnCharge.length > 0 && (
+                                <View style={styles.documentList}>
+                                    {informationsPersonnelles.justificatifPriseEnCharge.map((doc, index) => (
+                                        <View key={index} style={styles.documentItem}>
+                                            <Text style={styles.documentText}>Justificatif {index + 1}</Text>
+                                            <TouchableOpacity onPress={() => supprimerDocument('justificatifPriseEnCharge', index)}>
+                                                <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Text style={styles.label}>Copie de pièce d'identité (Carte de séjour/passeport/permis de conduire) <Text style={styles.requiredField}>*</Text></Text>
+                            <View style={styles.documentButtons}>
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => ajouterDocument('pieceIdentite', 'library')}
+                                >
+                                    <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                    <Text style={styles.documentButtonText}>Ajouter</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {informationsPersonnelles.pieceIdentite.length > 0 && (
+                                <View style={styles.documentList}>
+                                    {informationsPersonnelles.pieceIdentite.map((doc, index) => (
+                                        <View key={index} style={styles.documentItem}>
+                                            <Text style={styles.documentText}>Copie {index + 1}</Text>
+                                            <TouchableOpacity onPress={() => supprimerDocument('pieceIdentite', index)}>
+                                                <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Text style={styles.label}>Numéro de sécurité sociale <Text style={styles.requiredField}>*</Text></Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Votre numéro de sécurité sociale"
+                                value={informationsPersonnelles.numeroSecu}
+                                onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, numeroSecu: value }))}
+                            />
+
+                            <Text style={styles.label}>Nombre de personnes occupant le logement <Text style={styles.requiredField}>*</Text></Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Nombre de personnes occupant le logement"
+                                value={informationsPersonnelles.nombrePersonnes}
+                                onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, nombrePersonnes: value }))}
+                            />
+
+                            <Text style={styles.label}>Livret de famille <Text style={styles.requiredField}>*</Text></Text>
+                            <View style={styles.documentButtons}>
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => ajouterDocument('livretFamille', 'library')}
+                                >
+                                    <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                    <Text style={styles.documentButtonText}>Ajouter</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {informationsPersonnelles.livretFamille.length > 0 && (
+                                <View style={styles.documentList}>
+                                    {informationsPersonnelles.livretFamille.map((doc, index) => (
+                                        <View key={index} style={styles.documentItem}>
+                                            <Text style={styles.documentText}>Livret {index + 1}</Text>
+                                            <TouchableOpacity onPress={() => supprimerDocument('livretFamille', index)}>
+                                                <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Text style={styles.label}>Notification CAF ou relevé de situation <Text style={styles.requiredField}>*</Text></Text>
+                            <View style={styles.documentButtons}>
+                                <TouchableOpacity
+                                    style={styles.documentButton}
+                                    onPress={() => ajouterDocument('notificationCaf', 'library')}
+                                >
+                                    <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                    <Text style={styles.documentButtonText}>Ajouter</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {informationsPersonnelles.notificationCaf.length > 0 && (
+                                <View style={styles.documentList}>
+                                    {informationsPersonnelles.notificationCaf.map((doc, index) => (
+                                        <View key={index} style={styles.documentItem}>
+                                            <Text style={styles.documentText}>Notification {index + 1}</Text>
+                                            <TouchableOpacity onPress={() => supprimerDocument('notificationCaf', index)}>
+                                                <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            <View style={styles.conditionsContainer}>
+                                <Switch
+                                    value={informationsPersonnelles.accepteConditions}
+                                    onValueChange={(value) => setInformationsPersonnelles(prev => ({ ...prev, accepteConditions: value }))}
+                                />
+                                <Text style={styles.conditionsText}>
+                                    J'accepte les conditions d'utilisation et la politique de confidentialité
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+                    
                     <Text style={styles.label}>Pourquoi souhaitez-vous ajouter ce logement ? <Text style={styles.requiredField}>*</Text></Text>
                     <TextInput
                         style={[styles.input, styles.textArea]}
@@ -741,6 +1142,244 @@ const AjouterLogementScreen: React.FC = () => {
                     value={email}
                     onChangeText={setEmail}
                 />
+                
+                <Text style={styles.note}>Les champs marqués d'un <Text style={styles.requiredField}>*</Text> sont obligatoires</Text>
+                
+                <View style={styles.formRow}>
+                    <Text style={styles.label}>Êtes-vous le propriétaire du logement ?</Text>
+                    <Switch
+                        trackColor={{ false: "#767577", true: "#D81B60" }}
+                        thumbColor={estProprio ? "#fff" : "#f4f3f4"}
+                        ios_backgroundColor="#3e3e3e"
+                        onValueChange={setEstProprio}
+                        value={estProprio}
+                    />
+                </View>
+                
+                {estProprio && (
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>Vos informations personnelles</Text>
+                        
+                        <Text style={styles.label}>Profession <Text style={styles.requiredField}>*</Text></Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Votre profession"
+                            value={informationsPersonnelles.profession}
+                            onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, profession: value }))}
+                        />
+
+                        <Text style={styles.label}>Numéro de pièce d'identité <Text style={styles.requiredField}>*</Text></Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Numéro de votre carte de séjour/passeport/permis de conduire"
+                            value={informationsPersonnelles.numeroPieceIdentite}
+                            onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, numeroPieceIdentite: value }))}
+                        />
+
+                        <Text style={styles.label}>Bulletins de salaire (3 derniers mois) <Text style={styles.requiredField}>*</Text></Text>
+                        <View style={styles.documentButtons}>
+                            <TouchableOpacity
+                                style={styles.documentButton}
+                                onPress={() => ajouterDocument('bulletinsSalaire', 'library')}
+                            >
+                                <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                <Text style={styles.documentButtonText}>Ajouter</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {informationsPersonnelles.bulletinsSalaire.length > 0 && (
+                            <View style={styles.documentList}>
+                                {informationsPersonnelles.bulletinsSalaire.map((doc, index) => (
+                                    <View key={index} style={styles.documentItem}>
+                                        <Text style={styles.documentText}>Bulletin {index + 1}</Text>
+                                        <TouchableOpacity onPress={() => supprimerDocument('bulletinsSalaire', index)}>
+                                            <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <Text style={styles.label}>Contrat de travail <Text style={styles.requiredField}>*</Text></Text>
+                        <View style={styles.documentButtons}>
+                            <TouchableOpacity
+                                style={styles.documentButton}
+                                onPress={() => ajouterDocument('contratTravail', 'library')}
+                            >
+                                <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                <Text style={styles.documentButtonText}>Ajouter</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {informationsPersonnelles.contratTravail.length > 0 && (
+                            <View style={styles.documentList}>
+                                {informationsPersonnelles.contratTravail.map((doc, index) => (
+                                    <View key={index} style={styles.documentItem}>
+                                        <Text style={styles.documentText}>Contrat {index + 1}</Text>
+                                        <TouchableOpacity onPress={() => supprimerDocument('contratTravail', index)}>
+                                            <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <Text style={styles.label}>Numéro départemental de demande de logement social <Text style={styles.requiredField}>*</Text></Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Votre numéro de demande de logement social"
+                            value={informationsPersonnelles.numeroDemandeLogement}
+                            onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, numeroDemandeLogement: value }))}
+                        />
+
+                        <Text style={styles.label}>Numéro DALO ou justificatif de demande prioritaire <Text style={styles.requiredField}>*</Text></Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Votre numéro DALO ou justifiez votre demande prioritaire"
+                            value={informationsPersonnelles.numeroDalo}
+                            onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, numeroDalo: value }))}
+                        />
+
+                        <Text style={styles.label}>Quittances de loyer (3 derniers mois) <Text style={styles.requiredField}>*</Text></Text>
+                        <View style={styles.documentButtons}>
+                            <TouchableOpacity
+                                style={styles.documentButton}
+                                onPress={() => ajouterDocument('quittancesLoyer', 'library')}
+                            >
+                                <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                <Text style={styles.documentButtonText}>Ajouter</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {informationsPersonnelles.quittancesLoyer.length > 0 && (
+                            <View style={styles.documentList}>
+                                {informationsPersonnelles.quittancesLoyer.map((doc, index) => (
+                                    <View key={index} style={styles.documentItem}>
+                                        <Text style={styles.documentText}>Quittance {index + 1}</Text>
+                                        <TouchableOpacity onPress={() => supprimerDocument('quittancesLoyer', index)}>
+                                            <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <Text style={styles.label}>Justificatif de prise en charge par une association <Text style={styles.requiredField}>*</Text></Text>
+                        <View style={styles.documentButtons}>
+                            <TouchableOpacity
+                                style={styles.documentButton}
+                                onPress={() => ajouterDocument('justificatifPriseEnCharge', 'library')}
+                            >
+                                <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                <Text style={styles.documentButtonText}>Ajouter</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {informationsPersonnelles.justificatifPriseEnCharge.length > 0 && (
+                            <View style={styles.documentList}>
+                                {informationsPersonnelles.justificatifPriseEnCharge.map((doc, index) => (
+                                    <View key={index} style={styles.documentItem}>
+                                        <Text style={styles.documentText}>Justificatif {index + 1}</Text>
+                                        <TouchableOpacity onPress={() => supprimerDocument('justificatifPriseEnCharge', index)}>
+                                            <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <Text style={styles.label}>Copie de pièce d'identité (Carte de séjour/passeport/permis de conduire) <Text style={styles.requiredField}>*</Text></Text>
+                        <View style={styles.documentButtons}>
+                            <TouchableOpacity
+                                style={styles.documentButton}
+                                onPress={() => ajouterDocument('pieceIdentite', 'library')}
+                            >
+                                <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                <Text style={styles.documentButtonText}>Ajouter</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {informationsPersonnelles.pieceIdentite.length > 0 && (
+                            <View style={styles.documentList}>
+                                {informationsPersonnelles.pieceIdentite.map((doc, index) => (
+                                    <View key={index} style={styles.documentItem}>
+                                        <Text style={styles.documentText}>Copie {index + 1}</Text>
+                                        <TouchableOpacity onPress={() => supprimerDocument('pieceIdentite', index)}>
+                                            <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <Text style={styles.label}>Numéro de sécurité sociale <Text style={styles.requiredField}>*</Text></Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Votre numéro de sécurité sociale"
+                            value={informationsPersonnelles.numeroSecu}
+                            onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, numeroSecu: value }))}
+                        />
+
+                        <Text style={styles.label}>Nombre de personnes occupant le logement <Text style={styles.requiredField}>*</Text></Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Nombre de personnes occupant le logement"
+                            value={informationsPersonnelles.nombrePersonnes}
+                            onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, nombrePersonnes: value }))}
+                        />
+
+                        <Text style={styles.label}>Livret de famille <Text style={styles.requiredField}>*</Text></Text>
+                        <View style={styles.documentButtons}>
+                            <TouchableOpacity
+                                style={styles.documentButton}
+                                onPress={() => ajouterDocument('livretFamille', 'library')}
+                            >
+                                <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                <Text style={styles.documentButtonText}>Ajouter</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {informationsPersonnelles.livretFamille.length > 0 && (
+                            <View style={styles.documentList}>
+                                {informationsPersonnelles.livretFamille.map((doc, index) => (
+                                    <View key={index} style={styles.documentItem}>
+                                        <Text style={styles.documentText}>Livret {index + 1}</Text>
+                                        <TouchableOpacity onPress={() => supprimerDocument('livretFamille', index)}>
+                                            <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <Text style={styles.label}>Notification CAF ou relevé de situation <Text style={styles.requiredField}>*</Text></Text>
+                        <View style={styles.documentButtons}>
+                            <TouchableOpacity
+                                style={styles.documentButton}
+                                onPress={() => ajouterDocument('notificationCaf', 'library')}
+                            >
+                                <Ionicons name="document-outline" size={24} color="#D81B60" />
+                                <Text style={styles.documentButtonText}>Ajouter</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {informationsPersonnelles.notificationCaf.length > 0 && (
+                            <View style={styles.documentList}>
+                                {informationsPersonnelles.notificationCaf.map((doc, index) => (
+                                    <View key={index} style={styles.documentItem}>
+                                        <Text style={styles.documentText}>Notification {index + 1}</Text>
+                                        <TouchableOpacity onPress={() => supprimerDocument('notificationCaf', index)}>
+                                            <Ionicons name="close-circle" size={24} color="#D81B60" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <View style={styles.conditionsContainer}>
+                            <Switch
+                                value={informationsPersonnelles.accepteConditions}
+                                onValueChange={(value) => setInformationsPersonnelles(prev => ({ ...prev, accepteConditions: value }))}
+                            />
+                            <Text style={styles.conditionsText}>
+                                J'accepte les conditions d'utilisation et la politique de confidentialité
+                            </Text>
+                        </View>
+                    </View>
+                )}
                 
                 <Text style={styles.note}>Les champs marqués d'un <Text style={styles.requiredField}>*</Text> sont obligatoires</Text>
                 
@@ -1098,6 +1737,48 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: 'bold',
         marginLeft: 8,
+    },
+    documentButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginBottom: 15,
+    },
+    documentButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f5f5f5',
+        padding: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    documentButtonText: {
+        color: '#D81B60',
+        marginLeft: 5,
+    },
+    documentList: {
+        marginTop: 10,
+    },
+    documentItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 10,
+        backgroundColor: '#f9f9f9',
+        borderRadius: 8,
+        marginBottom: 5,
+    },
+    documentText: {
+        color: '#666',
+    },
+    conditionsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    conditionsText: {
+        marginLeft: 10,
+        color: '#666',
     },
 });
 

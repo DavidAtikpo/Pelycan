@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, SafeAreaView, FlatList, Linking } from 'react-native';
 import { Link } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons'; // Assurez-vous d'installer @expo/vector-icons
+import { Ionicons } from '@expo/vector-icons';
 
 // Définir un type pour les routes valides
 type AppRoute = 
@@ -13,148 +13,235 @@ type AppRoute =
     | "/(screens)/user/FamilleEndeuilleScreen"
     | "/(screens)/user/DemandeUrgenceScreen"
     | "/(screens)/user/VictimeFeminicideScreen"
-    | "/(screens)/user/ActualitesScreen";
+    | "/(screens)/user/ActualitesScreen" // Gardons cela pour le lien général
+    | "/(screens)/user/FormesViolenceScreen"
+    | "/(screens)/user/sidebar/a-propos"; // Ajout de la route "à propos"
 
-// Modifier l'interface des items
-interface ServiceItem {
-    icon: keyof typeof Ionicons.glyphMap;
+// Interface pour les items (adaptée pour les différents types de cartes)
+interface CardItem {
     title: string;
-    route: AppRoute;
+    subtitle?: string;
+    icon?: string;
+    route?: string;
+    imageUrl?: string;
+    date?: string;
+    link?: string;
 }
 
-// Mettre à jour le tableau avec le typage correct
-const services: ServiceItem[] = [
-    { icon: 'home', title: 'Demande de Logement', route: "/(screens)/user/LogementsDisponiblesScreen" },
-    { icon: 'bed', title: 'Hébergement d\'Urgence', route: "/(screens)/user/HebergementsTemporairesScreen" },
-    { icon: 'heart', title: 'Soutien Psychologique', route: "/(screens)/user/SoutienPsychologiqueScreen" },
-    { icon: 'location', title: 'Trouver un Centre d\'Aide', route: "/(screens)/user/CentreAideScreen" },
+// Données pour la section Urgence (style liste)
+const urgences: CardItem[] = [
+    { 
+        title: 'Victime de tentative de féminicide', 
+        route: "/(screens)/user/VictimeFeminicideScreen",
+        imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTOTqSkJa5mue8B9Pc8RFP-lnfmdlLSuyW3Ag&s'
+    },
+    { 
+        title: 'Formes de violence et protection', 
+        route: "/(screens)/user/FormesViolenceScreen",
+        imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRd0G9kEsyeDh4RUsDapWuiQ-MtuTPqR8F6Gw&s'
+    },
 ];
 
-const resources: ServiceItem[] = [
-    { icon: 'information-circle', title: 'Ressources d\'Urgence', route: "/(screens)/user/ResourcesUrgenceScreen" },
-    { icon: 'people', title: 'Support pour Familles Endeuillées', route: "/(screens)/user/FamilleEndeuilleScreen" },
+// Données pour la section Services (style grille 2x2)
+const services: CardItem[] = [
+    { 
+        icon: 'home-outline', 
+        title: 'Demande de logement', 
+        route: "/(screens)/user/LogementsDisponiblesScreen",
+        imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSp8oa13-a70NmXLXMMwQtj30XHAJXejgesdg&s' 
+    },
+    { 
+        icon: 'business-outline', 
+        title: 'Hébergement d\'urgence', 
+        route: "/(screens)/user/HebergementsTemporairesScreen",
+        imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSrlGzhzjA36JRMgR1Ac-aq7BlzjSyJtPc-gQ&s'
+    },
+    { 
+        icon: 'heart-outline', 
+        title: 'Soutien psychologique', 
+        route: "/(screens)/user/SoutienPsychologiqueScreen",
+        imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT6Ha6oOTzCiHCXpHt1bPTW8k3sEHzj_k9ulA&s'
+    },
+    { 
+        icon: 'location-outline', 
+        title: 'Trouver un centre d\'aide', 
+        route: "/(screens)/user/CentreAideScreen",
+        imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAkGWyP5E_SJwpVX5N7D61Nw5rzph4gWL9pQ&s'
+    },
 ];
 
-const urgences: ServiceItem[] = [
-    { icon: 'medical', title: 'Victime de Tentative de Féminicide', route: "/(screens)/user/VictimeFeminicideScreen" },
+// Données pour la section Ressources (style liste avec sous-titres)
+const resources: CardItem[] = [
+    { 
+        title: 'Ressources d\'urgence', 
+        subtitle: 'Accès rapide aux contacts et informations essentielles', 
+        route: "/(screens)/user/ResourcesUrgenceScreen",
+        imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTaaYuhIc4Wzs_UcARc4FjHdCuZTxyzYXKfmg&s'
+    },
+    { 
+        title: 'Support pour familles endeuillées', 
+        subtitle: 'Accompagnement et soutien dans les moments difficiles', 
+        route: "/(screens)/user/FamilleEndeuilleScreen",
+        imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTKcOq7tF2PqWg_fJRFcjlx6FEUjfg_Fz_74Q&s'
+    },
 ];
+
+// Données pour la section Actualités (style cartes horizontales)
+const actualites: CardItem[] = [
+    {
+        title: "Témoignage : Mon parcours vers la liberté",
+        subtitle: "Sarah partage son histoire de résilience et de courage",
+        imageUrl: "https://www.info.gouv.fr/upload/media/content/0001/12/6c9edcd2de33f88facfed46665d356d414596531.jpg",
+        date: "15 mars 2024",
+        link: "https://blog.pelycan.fr/temoignage-sarah"
+    },
+    {
+        title: "Nouvelle loi sur les violences conjugales",
+        subtitle: "Ce qui change pour les victimes",
+        imageUrl: "https://france3-regions.francetvinfo.fr/image/KC4gAKWPJBzzxX1OtPe7hr1A-eE/3x0:627x351/800x450/filters:format(webp)/regions/2025/02/17/dortoir-67b3126aaab97890683199.jpg",
+        date: "10 mars 2024",
+        link: "https://blog.pelycan.fr/nouvelle-loi-2024"
+    },
+    {
+        title: "Succès de notre programme d'accompagnement",
+        subtitle: "100 femmes accompagnées en 2023",
+        imageUrl: "https://via.placeholder.com/150/009688/FFFFFF?text=Success",
+        date: "5 mars 2024",
+        link: "https://blog.pelycan.fr/bilan-2023"
+    }
+];
+
 
 const HomeScreen: React.FC = () => {
+    // Fonction pour rendre une carte de la section Urgence
+    const renderUrgenceCard = ({ item }: { item: CardItem }) => (
+        <Link href={item.route as any} asChild>
+            <TouchableOpacity style={styles.urgenceCard}>
+                <Image source={{ uri: item.imageUrl }} style={styles.urgenceImage} />
+                <Text style={styles.urgenceCardText}>{item.title}</Text>
+                <Ionicons name="chevron-forward-outline" size={24} color="#6A0DAD" />
+            </TouchableOpacity>
+        </Link>
+    );
+
+    // Fonction pour rendre une carte de la section Services
+    const renderServiceCard = ({ item }: { item: CardItem }) => (
+        <Link href={item.route as any} asChild>
+            <TouchableOpacity style={styles.serviceCard}>
+                <Image source={{ uri: item.imageUrl }} style={styles.serviceImage} />
+                <Text style={styles.serviceCardText}>{item.title}</Text>
+            </TouchableOpacity>
+        </Link>
+    );
+
+    // Fonction pour rendre une carte de la section Ressources
+    const renderResourceCard = ({ item }: { item: CardItem }) => (
+        <Link href={item.route as any} asChild>
+            <TouchableOpacity style={styles.resourceCard}>
+                <Image source={{ uri: item.imageUrl }} style={styles.resourceImage} />
+                <View style={styles.resourceTextContainer}>
+                    <Text style={styles.resourceCardTitle}>{item.title}</Text>
+                    <Text style={styles.resourceCardSubtitle}>{item.subtitle}</Text>
+                </View>
+            </TouchableOpacity>
+        </Link>
+    );
+
+    // Fonction pour rendre une carte de la section Actualités
+    const renderActualiteCard = ({ item }: { item: CardItem }) => (
+        <TouchableOpacity 
+            style={styles.actualiteCard}
+            onPress={() => item.link && Linking.openURL(item.link)}
+        >
+            <Image 
+                source={{ uri: item.imageUrl }} 
+                style={styles.actualiteImage}
+            />
+            <View style={styles.actualiteContent}>
+                <Text style={styles.actualiteTitle}>{item.title}</Text>
+                <Text style={styles.actualiteSubtitle}>{item.subtitle}</Text>
+                <Text style={styles.actualiteDate}>{item.date}</Text>
+            </View>
+        </TouchableOpacity>
+    );
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <ScrollView style={styles.container}>
+                {/* Header */}
                 <View style={styles.header}>
+                    {/* Logo Pelycan au lieu de l'icône grid-outline */}
                     <Image 
                         source={require('../../assets/images/Logopelycan.jpg')}
-                        style={styles.logo}
+                        style={styles.logoHeader}
                     />
                     <View style={styles.headerTextContainer}>
                         <Text style={styles.welcomeText}>Bienvenue sur Pelycan</Text>
-                        <View style={styles.securityBadge}>
+                        <Text style={styles.headerSloganStyle}>Se Relever pour se Révéler</Text> 
+                        <View style={styles.sloganContainer}> 
                             <Ionicons name="shield-checkmark" size={16} color="#4CAF50" />
-                            <Text style={styles.securityIndicator}>Espace sécurisé</Text>
+                            <Text style={styles.sloganText}>Votre espace sécurisé et confidentiel</Text>
                         </View>
                     </View>
-                </View>
-
-                <View style={styles.emergencySection}>
-                    <TouchableOpacity style={styles.emergencyButton}>
-                        <Link href="/(screens)/user/DemandeUrgenceScreen" style={styles.emergencyButtonContent}>
-                            <Ionicons name="warning" size={28} color="#FF0000" />
-                            <Text style={styles.emergencyButtonText}>URGENCE IMMÉDIATE</Text>
-                        </Link>
-                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.mainContent}>
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name="alert-circle" size={24} color="#FF5722" />
-                            <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>Urgences</Text>
-                        </View>
-                        <View style={styles.gridContainer}>
-                            {urgences.map((item, index) => (
-                                <View key={index} style={styles.gridCard}>
-                                    <TouchableOpacity style={styles.gridCardContent}>
-                                        <Link href={item.route as any}>
-                                            <View style={styles.cardInner}>
-                                                <View style={styles.gridIconContainer}>
-                                                    <Ionicons name={item.icon} size={32} color="#9C27B0" />
-                                                </View>
-                                                <Text style={styles.gridCardText}>{item.title}</Text>
-                                            </View>
-                                        </Link>
-                                    </TouchableOpacity>
-                                </View>
-                            ))}
-                        </View>
+                    {/* Bouton Urgence Immédiate */}
+                    <View style={styles.emergencySection}>
+                        <Link href="/(screens)/user/DemandeUrgenceScreen" asChild>
+                            <TouchableOpacity style={styles.emergencyButton}>
+                                <Ionicons name="phone-portrait-outline" size={24} color="#FFFFFF" />
+                                <Text style={styles.emergencyButtonText}>URGENCE IMMÉDIATE</Text>
+                            </TouchableOpacity>
+                        </Link>
                     </View>
 
+                    {/* Section Urgence */}
                     <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name="home" size={24} color="#FF5722" />
-                            <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>Services</Text>
-                        </View>
-                        <View style={styles.gridContainer}>
-                            {services.map((item, index) => (
-                                <View key={index} style={styles.gridCard}>
-                                    <TouchableOpacity style={styles.gridCardContent}>
-                                        <Link href={item.route as any}>
-                                            <View style={styles.cardInner}>
-                                                <View style={styles.gridIconContainer}>
-                                                    <Ionicons name={item.icon} size={32} color="#9C27B0" />
-                                                </View>
-                                                <Text style={styles.gridCardText}>{item.title}</Text>
-                                            </View>
-                                        </Link>
-                                    </TouchableOpacity>
-                                </View>
-                            ))}
-                        </View>
+                        <Text style={styles.sectionTitle}>Urgence</Text>
+                         <FlatList
+                            data={urgences}
+                            renderItem={renderUrgenceCard}
+                            keyExtractor={(item, index) => `urgence-${index}`}
+                            scrollEnabled={false} // Désactiver le défilement interne
+                        />
                     </View>
 
+                    {/* Section Services */}
                     <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name="book" size={24} color="#FF5722" />
-                            <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>Ressources</Text>
-                        </View>
-                        <View style={styles.gridContainer}>
-                            {resources.map((item, index) => (
-                                <View key={index} style={styles.gridCard}>
-                                    <TouchableOpacity style={styles.gridCardContent}>
-                                        <Link href={item.route as any}>
-                                            <View style={styles.cardInner}>
-                                                <View style={styles.gridIconContainer}>
-                                                    <Ionicons name={item.icon} size={32} color="#9C27B0" />
-                                                </View>
-                                                <Text style={styles.gridCardText}>{item.title}</Text>
-                                            </View>
-                                        </Link>
-                                    </TouchableOpacity>
-                                </View>
-                            ))}
-                        </View>
+                        <Text style={styles.sectionTitle}>Services</Text>
+                        <FlatList
+                            data={services}
+                            renderItem={renderServiceCard}
+                            keyExtractor={(item, index) => `service-${index}`}
+                            numColumns={2} // Grille 2x2
+                            columnWrapperStyle={styles.serviceGridRow}
+                            scrollEnabled={false}
+                        />
                     </View>
 
-                    <View style={[styles.section, styles.lastSection]}>
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name="newspaper" size={24} color="#FF5722" />
-                            <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>Actualités et Témoignages</Text>
-                        </View>
-                        <View style={styles.gridContainer}>
-                            <View style={styles.gridCard}>
-                                <TouchableOpacity style={styles.gridCardContent}>
-                                    <Link href="/(screens)/user/ActualitesScreen">
-                                        <View style={styles.cardInner}>
-                                            <View style={styles.gridIconContainer}>
-                                                <Ionicons name="time" size={32} color="#9C27B0" />
-                                            </View>
-                                            <Text style={styles.gridCardText}>Dernières Actualités</Text>
-                                        </View>
-                                    </Link>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                    {/* Section Ressources */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Ressources</Text>
+                        <FlatList
+                            data={resources}
+                            renderItem={renderResourceCard}
+                            keyExtractor={(item, index) => `resource-${index}`}
+                            scrollEnabled={false}
+                        />
+                    </View>
+
+                    {/* Section Actualités et Témoignages (Déplacée en bas) */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Actualités et témoignages</Text>
+                        <FlatList
+                            data={actualites}
+                            renderItem={renderActualiteCard}
+                            keyExtractor={(item, index) => `actu-${index}`}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.actualiteListContainer}
+                        />
                     </View>
                 </View>
             </ScrollView>
@@ -165,163 +252,230 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#F8F0FF',
+        backgroundColor: '#F5F5F5',
     },
     container: {
         flex: 1,
     },
+    // --- Header Styles ---
     header: {
-        padding: 20,
-        backgroundColor: '#fff',
+        paddingVertical: 15,
+        paddingHorizontal: 20,
+        backgroundColor: '#FFFFFF',
         flexDirection: 'row',
         alignItems: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: '#E6E0FF',
-        elevation: 2,
+        borderBottomColor: '#EEEEEE',
     },
-    logo: {
-        width: 50,
-        height: 50,
-        marginRight: 15,
-        borderRadius: 25,
+    logoHeader: {
+        width: 45,
+        height: 45,
+        borderRadius: 23,
     },
     headerTextContainer: {
-        flex: 1,
+        marginLeft: 15,
     },
     welcomeText: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
-        color: '#8B008B',
+        color: '#333333',
     },
-    securityBadge: {
+    headerSloganStyle: { // Style pour le slogan "Se Relever..."
+        fontSize: 15,
+        color: '#6A0DAD', // Violet
+        fontStyle: 'italic',
+        marginTop: 2,
+        marginBottom: 4,
+    },
+    sloganContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 5,
-        backgroundColor: '#F0FFF0',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
+        // marginTop: 4, // Supprimé pour rapprocher du slogan au-dessus
     },
-    securityIndicator: {
+    sloganText: {
         fontSize: 14,
         color: '#4CAF50',
         marginLeft: 5,
     },
+     // --- Emergency Button Styles ---
     emergencySection: {
-        padding: 15,
+        paddingHorizontal: 20,
+        paddingVertical: 15,
     },
     emergencyButton: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        padding: 15,
-        elevation: 3,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 3.84,
-        borderWidth: 2,
-        borderColor: '#FF0000',
-    },
-    emergencyButtonContent: {
+        backgroundColor: '#DC3545',
+        borderRadius: 8,
+        paddingVertical: 15,
+        paddingHorizontal: 20,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        elevation: 3,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
     },
     emergencyButtonText: {
-        color: '#FF0000',
-        fontSize: 20,
+        color: '#FFFFFF',
+        fontSize: 16,
         fontWeight: 'bold',
+        marginLeft: 10,
         textAlign: 'center',
     },
+    // --- Actualités Section (Specific Style for positioning) ---
+    sectionActualites: {
+        paddingLeft: 20, // Aligner le titre avec les autres sections
+        marginBottom: 25, // Espace après la section actualités
+        // Pas de paddingHorizontal ici car la FlatList gère son padding
+    },
+    // --- Main Content & Sections ---
     mainContent: {
-        padding: 10,
+        paddingHorizontal: 20,
+        paddingTop: 0, // Pas besoin de paddingTop ici car Actualités est au-dessus
     },
     section: {
-        backgroundColor: '#fff',
-        borderRadius: 15,
+        marginBottom: 25,
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#FF5722',
         marginBottom: 15,
+    },
+    // --- Urgence Card Styles ---
+    urgenceCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        paddingVertical: 15,
+        paddingHorizontal: 15,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    urgenceImage: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 15,
+    },
+    urgenceCardText: {
+        flex: 1,
+        fontSize: 15,
+        color: '#333333',
+        fontWeight: '500',
+    },
+     // --- Service Card Styles ---
+     serviceGridRow: {
+        justifyContent: 'space-between', // Espace égal entre les cartes de service
+    },
+    serviceCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
         padding: 12,
-        shadowColor: "#6A0DAD",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '48%',
+        aspectRatio: 1,
+        marginBottom: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+        overflow: 'hidden',
+    },
+    serviceImage: {
+        width: '100%',
+        height: 90,
+        borderRadius: 4,
+        marginBottom: 8,
+    },
+    serviceCardText: {
+        fontSize: 13,
+        color: '#333333',
+        textAlign: 'center',
+        fontWeight: '500',
+    },
+    // --- Resource Card Styles ---
+    resourceCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        padding: 15,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+        overflow: 'hidden',
+    },
+    resourceImage: {
+        width: 80,
+        height: 80,
+        borderRadius: 8,
+        marginRight: 15,
+    },
+    resourceTextContainer: {
+        flex: 1,
+        marginLeft: 0, // Pas d'icône à gauche pour l'instant
+    },
+    resourceCardTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333333',
+    },
+    resourceCardSubtitle: {
+        fontSize: 14,
+        color: '#666666',
+        marginTop: 3,
+    },
+    // --- Actualités Card Styles (Déjà définis, mais vérifier le container) ---
+    actualiteListContainer: {
+        paddingLeft: 0, // La FlatList commence au bord de la sectionActualites
+        paddingRight: 20, // Espace à droite de la dernière carte
+    },
+    actualiteCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        width: 200, // Réduction de la taille (avant: 250)
+        marginRight: 15,
+        overflow: 'hidden',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 3,
         elevation: 3,
     },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginLeft: 8,
-    },
-    gridContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        paddingHorizontal: 4,
-    },
-    gridCard: {
-        width: '48%',
-        marginBottom: 8,
-    },
-    gridCardContent: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        padding: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: 110,
-        shadowColor: "#6A0DAD",
-        shadowOffset: {
-            width: 0,
-            height: 1,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 3,
-    },
-    cardInner: {
-        alignItems: 'center',
-        justifyContent: 'center',
+    actualiteImage: {
         width: '100%',
+        height: 90, // Réduction de la hauteur (avant: 120)
     },
-    gridIconContainer: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: '#F8F0FF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-        shadowColor: "#6A0DAD",
-        shadowOffset: {
-            width: 0,
-            height: 1,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 1,
-        elevation: 2,
+    actualiteContent: {
+        padding: 10, // Réduction du padding (avant: 12)
     },
-    gridCardText: {
-        fontSize: 12,
-        color: '#4A154B',
-        textAlign: 'center',
-        fontWeight: '500',
-        paddingHorizontal: 4,
+    actualiteTitle: {
+        fontSize: 14, // Réduction de la taille (avant: 15)
+        fontWeight: 'bold',
+        color: '#333333',
+        marginBottom: 4,
     },
-    lastSection: {
-        marginBottom: 30,
+    actualiteSubtitle: {
+        fontSize: 12, // Réduction de la taille (avant: 13)
+        color: '#666666',
+        marginBottom: 6, // Réduction (avant: 8)
     },
+    actualiteDate: {
+        fontSize: 11, // Réduction de la taille (avant: 12)
+        color: '#999999',
+    },
+    // --- Last Section (Style plus nécessaire ici car Actualités a bougé) ---
+    // lastSection: { ... }
 });
 
 export default HomeScreen;
