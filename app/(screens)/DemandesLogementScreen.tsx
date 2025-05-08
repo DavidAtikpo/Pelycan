@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../../config/api';
 
 // Interface pour les demandes de logement
 interface DemandeLogement {
@@ -17,6 +18,29 @@ interface DemandeLogement {
   logementId?: string;
   statut: 'en_attente' | 'en_cours' | 'acceptee' | 'refusee';
   dateCreation: string;
+  logement?: {
+    id: string;
+    titre: string;
+    adresse: string;
+    ville: string;
+  } | null;
+}
+
+function mapDemandeFromApi(apiDemande: any): DemandeLogement {
+  return {
+    id: apiDemande.id,
+    nom: apiDemande.nom,
+    prenom: apiDemande.prenom,
+    telephone: apiDemande.telephone,
+    email: apiDemande.email,
+    nombrePersonnes: apiDemande.nombre_personnes,
+    niveauUrgence: apiDemande.niveau_urgence,
+    message: apiDemande.message,
+    logementId: apiDemande.logement_id,
+    statut: apiDemande.status,
+    dateCreation: apiDemande.created_at,
+    logement: apiDemande.logement ?? null,
+  };
 }
 
 const DemandesLogementScreen: React.FC = () => {
@@ -30,7 +54,7 @@ const DemandesLogementScreen: React.FC = () => {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       
-      const response = await fetch('http://10.0.2.2:3000/api/demandes-logement', {
+      const response = await fetch(`${API_URL}/demandes`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -42,7 +66,7 @@ const DemandesLogementScreen: React.FC = () => {
       }
 
       const data = await response.json();
-      setDemandes(data);
+      setDemandes(data.data.map(mapDemandeFromApi));
     } catch (error) {
       console.error('Erreur:', error);
       Alert.alert('Erreur', 'Impossible de charger les demandes de logement');
@@ -59,16 +83,18 @@ const DemandesLogementScreen: React.FC = () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       
-      const response = await fetch(`http://10.0.2.2:3000/api/demandes-logement/${id}/statut`, {
+      const response = await fetch(`${API_URL}/demandes/${id}/status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ statut: nouveauStatut })
+        body: JSON.stringify({ status: nouveauStatut })
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Réponse serveur:', errorText);
         throw new Error('Erreur lors de la mise à jour du statut');
       }
 
@@ -181,7 +207,14 @@ const DemandesLogementScreen: React.FC = () => {
         
         <TouchableOpacity 
           style={styles.detailsButton}
-          onPress={() => Alert.alert('Information', 'Détails de la demande')}
+          onPress={() => {
+            let details = `Nom: ${item.prenom} ${item.nom}\nTél: ${item.telephone}\nEmail: ${item.email}\nPersonnes: ${item.nombrePersonnes}\nUrgence: ${item.niveauUrgence}\nDate: ${new Date(item.dateCreation).toLocaleDateString()}`;
+            if (item.message) details += `\nMessage: ${item.message}`;
+            if (item.logement) {
+              details += `\n\nLogement demandé:\nTitre: ${item.logement.titre}\nAdresse: ${item.logement.adresse}\nVille: ${item.logement.ville}`;
+            }
+            Alert.alert('Détails de la demande', details);
+          }}
         >
           <Text style={styles.detailsButtonText}>Détails</Text>
           <Ionicons name="chevron-forward" size={16} color="#2196F3" />

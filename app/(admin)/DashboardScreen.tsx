@@ -185,7 +185,7 @@ const DashboardScreen: React.FC = () => {
 
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => router.push('/(screens)/DemandesAjoutLogementScreen')}
+          onPress={() => router.push('/(screens)/DemandesLogementScreen')}
         >
           <Ionicons name="home-outline" size={24} color="#fff" />
           <Text style={styles.actionButtonText}>Gestion des demandes de logement</Text>
@@ -194,10 +194,10 @@ const DashboardScreen: React.FC = () => {
 
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => router.push('/(screens)/DemandesAjoutLogementScreen')}
+          onPress={() => router.push('/(screens)/AdminRecuperDemandesAjoutLogementScreen')}
         >
           <Ionicons name="add-circle-outline" size={24} color="#fff" />
-          <Text style={styles.actionButtonText}>Gestion des demandes d'ajout de logement</Text>
+          <Text style={styles.actionButtonText}>Gestion des demandes de partenariat</Text>
           <Ionicons name="chevron-forward" size={24} color="#fff" style={styles.actionArrow} />
         </TouchableOpacity>
 
@@ -212,10 +212,10 @@ const DashboardScreen: React.FC = () => {
 
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => router.push('/(screens)/LogementsManagementScreen')}
+          onPress={() => router.push('/(screens)/GestionLogementsScreen')}
         >
           <Ionicons name="business-outline" size={24} color="#fff" />
-          <Text style={styles.actionButtonText}>Gestion des logements</Text>
+          <Text style={styles.actionButtonText}>Gestion des logements des partenaires</Text>
           <Ionicons name="chevron-forward" size={24} color="#fff" style={styles.actionArrow} />
         </TouchableOpacity>
       </View>

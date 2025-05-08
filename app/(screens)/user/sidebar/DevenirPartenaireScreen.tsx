@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AjouterLogementScreen from '../AjouterLogementScreen';
+import AjouterLogementScreen from '../FormulairedemandeAjouterLogementScreen';
 import SoutienPsychologiqueForm from '../forms/SoutienPsychologiqueForm';
 import CompetencesProForm from '../forms/CompetencesProForm';
 import PartenariatInstitutionnelForm from '../forms/PartenariatInstitutionnelForm';
@@ -68,9 +68,9 @@ const DevenirPartenaireScreen = () => {
           onPress={() => handleOptionPress('logement')}
         >
           <Ionicons name="home" size={32} color="#D81B60" />
-          <Text style={styles.optionTitle}>Hébergement temporaire</Text>
+          <Text style={styles.optionTitle}>Hébergement</Text>
           <Text style={styles.optionDescription}>
-            Proposez un logement temporaire pour aider une femme à se reconstruire
+            Proposez un logement pour aider une femme à se reconstruire
           </Text>
         </TouchableOpacity>
 

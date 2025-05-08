@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, Modal, ActivityIndicator, RefreshControl, ScrollView, Share } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, Modal, ActivityIndicator, RefreshControl, ScrollView, Share, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api';
@@ -9,7 +9,7 @@ interface Professional {
   fullName: string;
   email: string;
   phone_number: string;
-  status: 'active' | 'pending' | 'inactive' | 'suspended';
+  status: 'active' | 'pending' | 'inactive';
   verificationDocuments: string[];
   activeCases: number;
   createdAt: string;
@@ -17,7 +17,10 @@ interface Professional {
   totalCases?: number;
   rating?: number;
   notes?: string;
-  availability?: boolean;
+  availability?: any;
+  speciality?: string;
+  address?: any;
+  profile_picture?: string;
 }
 
 const ProManagementScreen: React.FC = () => {
@@ -25,7 +28,7 @@ const ProManagementScreen: React.FC = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [filteredPros, setFilteredPros] = useState<Professional[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedPro, setSelectedPro] = useState<Professional | null>(null);
+  const [selectedProId, setSelectedProId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -35,8 +38,13 @@ const ProManagementScreen: React.FC = () => {
   const [selectedProForNotes, setSelectedProForNotes] = useState<Professional | null>(null);
   const [statsModalVisible, setStatsModalVisible] = useState(false);
   const [selectedProForStats, setSelectedProForStats] = useState<Professional | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
+  const [selectedProData, setSelectedProData] = useState<Professional | null>(null);
+
+  const selectedPro = professionals.find(pro => pro.id === selectedProId) || null;
 
   const fetchProfessionals = async () => {
+    setIsFetching(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
       const response = await fetch(`${API_URL}/admin/professionals`, {
@@ -54,6 +62,17 @@ const ProManagementScreen: React.FC = () => {
       const data = await response.json();
       setProfessionals(data.data || []);
       filterProfessionals(data.data || [], searchQuery);
+
+      if (selectedProId) {
+        const found = (data.data || []).find((pro: Professional) => pro.id === selectedProId);
+        if (found) {
+          setSelectedProData(found);
+        } else {
+          setModalVisible(false);
+          setSelectedProId(null);
+          setSelectedProData(null);
+        }
+      }
     } catch (error) {
       console.error('Erreur:', error);
       Alert.alert(
@@ -63,6 +82,7 @@ const ProManagementScreen: React.FC = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setIsFetching(false);
     }
   };
 
@@ -100,17 +120,39 @@ const ProManagementScreen: React.FC = () => {
 
   useEffect(() => {
     fetchProfessionals();
-    const intervalId = setInterval(fetchProfessionals, 5000);
-
-    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
     filterProfessionals(professionals, searchQuery);
   }, [searchQuery, filterStatus, sortBy]);
 
-  const handleStatusChange = async (proId: string, newStatus: 'active' | 'pending' | 'inactive' | 'suspended') => {
+  useEffect(() => {
+    if (
+      selectedProId &&
+      !professionals.find(pro => pro.id === selectedProId) &&
+      !isFetching
+    ) {
+      setModalVisible(false);
+      setSelectedProId(null);
+    }
+  }, [professionals, selectedProId, isFetching]);
+
+  useEffect(() => {
+    // Ne ferme le modal que si le professionnel a été supprimé de la liste ET qu'on n'est pas en train de fetcher
+    if (
+      modalVisible &&
+      selectedProId &&
+      !professionals.find(pro => pro.id === selectedProId) &&
+      !isFetching
+    ) {
+      setModalVisible(false);
+      setSelectedProId(null);
+    }
+  }, [professionals, selectedProId, isFetching, modalVisible]);
+
+  const handleStatusChange = async (proId: string, newStatus: 'active' | 'pending' | 'inactive') => {
     try {
+      setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       const response = await fetch(`${API_URL}/admin/professionals/${proId}/status`, {
         method: 'PATCH',
@@ -121,52 +163,76 @@ const ProManagementScreen: React.FC = () => {
         body: JSON.stringify({ status: newStatus }),
       });
 
-      if (response.ok) {
-        const updatedPros = professionals.map(pro => 
-          pro.id === proId ? { ...pro, status: newStatus } : pro
-        );
-        setProfessionals(updatedPros);
-        filterProfessionals(updatedPros, searchQuery);
-        Alert.alert('Succès', 'Statut du professionnel mis à jour');
-      } else {
-        throw new Error('Erreur lors de la mise à jour');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Erreur lors de la mise à jour du statut');
       }
+
+      // Mettre à jour la liste des professionnels
+      const updatedPros = professionals.map(pro => 
+        pro.id === proId ? { ...pro, status: newStatus } : pro
+      );
+      setProfessionals(updatedPros);
+      filterProfessionals(updatedPros, searchQuery);
+
+      // Mettre à jour selectedProData si c'est le professionnel actuellement sélectionné
+      if (selectedProData && selectedProData.id === proId) {
+        setSelectedProData({ ...selectedProData, status: newStatus });
+      }
+
+      Alert.alert('Succès', 'Statut du professionnel mis à jour avec succès');
     } catch (error) {
       console.error('Erreur:', error);
       Alert.alert(
         'Erreur',
-        'Impossible de mettre à jour le statut du professionnel'
+        (error as Error).message || 'Impossible de mettre à jour le statut du professionnel'
       );
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDeletePro = async (proId: string) => {
     try {
+      setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`${API_URL}/admin/professionals/${proId}`, {
-        method: 'DELETE',
+      const response = await fetch(`${API_URL}/admin/users/${proId}/role`, {
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ role: 'user' }),
       });
 
-      if (response.ok) {
-        const updatedPros = professionals.filter(pro => pro.id !== proId);
-        setProfessionals(updatedPros);
-        filterProfessionals(updatedPros, searchQuery);
-        setModalVisible(false);
-        Alert.alert('Succès', 'Professionnel supprimé avec succès');
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Erreur lors de la suppression');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Erreur lors du changement de rôle');
       }
+
+      // Mettre à jour la liste des professionnels en retirant celui qui a été converti en user
+      const updatedPros = professionals.filter(pro => pro.id !== proId);
+      setProfessionals(updatedPros);
+      filterProfessionals(updatedPros, searchQuery);
+
+      // Fermer le modal si c'est le professionnel actuellement sélectionné
+      if (selectedProData && selectedProData.id === proId) {
+        setModalVisible(false);
+        setSelectedProId(null);
+        setSelectedProData(null);
+      }
+
+      Alert.alert('Succès', 'Le professionnel a été converti en utilisateur avec succès');
     } catch (error) {
       console.error('Erreur:', error);
       Alert.alert(
         'Erreur',
-        (error as Error).message || 'Impossible de supprimer le professionnel'
+        (error as Error).message || 'Impossible de changer le rôle du professionnel'
       );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -179,7 +245,6 @@ const ProManagementScreen: React.FC = () => {
     switch (status) {
       case 'active': return '#4CAF50';
       case 'pending': return '#FFA000';
-      case 'suspended': return '#FF5722';
       case 'inactive': return '#f44336';
       default: return '#666';
     }
@@ -248,13 +313,16 @@ const ProManagementScreen: React.FC = () => {
     }
   };
 
+  const openProModal = (pro: Professional) => {
+    setSelectedProId(pro.id);
+    setSelectedProData(pro);
+    setModalVisible(true);
+  };
+
   const renderProItem = ({ item }: { item: Professional }) => (
     <TouchableOpacity 
       style={styles.proCard}
-      onPress={() => {
-        setSelectedPro(item);
-        setModalVisible(true);
-      }}
+      onPress={() => openProModal(item)}
     >
       <View style={styles.proInfo}>
         <Text style={styles.proName}>{item.fullName}</Text>
@@ -304,129 +372,210 @@ const ProManagementScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const DetailModal = () => (
-    <Modal
-      visible={modalVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setModalVisible(false)}
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <TouchableOpacity 
-            style={styles.closeButton}
-            onPress={() => setModalVisible(false)}
-          >
-            <Ionicons name="close" size={24} color="#666" />
-          </TouchableOpacity>
-          
-          {selectedPro && (
-            <>
-              <Text style={styles.modalTitle}>Détails du Professionnel</Text>
+  const DetailModal = () => {
+    if (modalVisible && !selectedProData && isFetching) {
+      return (
+        <Modal
+          visible={modalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => {
+            setModalVisible(false);
+            setSelectedProId(null);
+            setSelectedProData(null);
+          }}
+        >
+          <View style={styles.modalContainer}>
+            <ActivityIndicator size="large" color="#2196F3" />
+          </View>
+        </Modal>
+      );
+    }
+
+    if (!modalVisible || !selectedProData) return null;
+
+    return (
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setModalVisible(false);
+          setSelectedProId(null);
+          setSelectedProData(null);
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity 
+              style={styles.closeButton}
+              onPress={() => {
+                setModalVisible(false);
+                setSelectedProId(null);
+                setSelectedProData(null);
+              }}
+            >
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+            
+            <Text style={styles.modalTitle}>Détails du Professionnel</Text>
+            <View style={styles.detailRow}>
+              <Ionicons name="person" size={20} color="#666" />
+              <Text style={styles.detailText}>{selectedProData.fullName}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Ionicons name="mail" size={20} color="#666" />
+              <Text style={styles.detailText}>{selectedProData.email}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Ionicons name="call" size={20} color="#666" />
+              <Text style={styles.detailText}>{selectedProData.phone_number}</Text>
+            </View>
+            {selectedProData.speciality && (
               <View style={styles.detailRow}>
-                <Ionicons name="person" size={20} color="#666" />
-                <Text style={styles.detailText}>{selectedPro.fullName}</Text>
+                <Ionicons name="medal" size={20} color="#666" />
+                <Text style={styles.detailText}>Spécialité : {selectedProData.speciality}</Text>
               </View>
+            )}
+            {selectedProData.profile_picture && (
               <View style={styles.detailRow}>
-                <Ionicons name="mail" size={20} color="#666" />
-                <Text style={styles.detailText}>{selectedPro.email}</Text>
+                <Ionicons name="image" size={20} color="#666" />
+                {selectedProData.profile_picture.startsWith('http') ? (
+                  <Image source={{ uri: selectedProData.profile_picture }} style={{ width: 60, height: 60, borderRadius: 30, marginLeft: 10 }} />
+                ) : (
+                  <Text style={styles.detailText}>Photo : {selectedProData.profile_picture}</Text>
+                )}
               </View>
-              <View style={styles.detailRow}>
-                <Ionicons name="call" size={20} color="#666" />
-                <Text style={styles.detailText}>{selectedPro.phone_number}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Ionicons name="folder" size={20} color="#666" />
-                <Text style={styles.detailText}>{selectedPro.activeCases} cas actifs</Text>
-              </View>
+            )}
+            {selectedProData.availability && (
               <View style={styles.detailRow}>
                 <Ionicons name="calendar" size={20} color="#666" />
                 <Text style={styles.detailText}>
-                  Inscrit le {new Date(selectedPro.createdAt).toLocaleDateString()}
+                  Disponibilité : {typeof selectedProData.availability === 'object'
+                    ? Object.entries(selectedProData.availability).map(([key, value]) =>
+                        typeof value === 'boolean'
+                          ? `${key}: ${value ? 'Oui' : 'Non'} `
+                          : `${key}: ${value} `
+                      ).join(', ')
+                    : String(selectedProData.availability)}
                 </Text>
               </View>
-              
-              <Text style={styles.sectionTitle}>Documents de Vérification</Text>
-              <View style={styles.documentsContainer}>
-                {selectedPro.verificationDocuments?.map((doc, index) => (
-                  <TouchableOpacity 
-                    key={index}
-                    style={styles.documentItem}
-                  >
-                    <Ionicons name="document-text" size={24} color="#666" />
-                    <Text style={styles.documentText}>Document {index + 1}</Text>
-                  </TouchableOpacity>
-                )) || (
-                  <Text style={styles.noDocumentsText}>Aucun document fourni</Text>
-                )}
+            )}
+            {selectedProData.address && (
+              <View style={styles.detailRow}>
+                <Ionicons name="location" size={20} color="#666" />
+                <Text style={styles.detailText}>
+                  Adresse : {typeof selectedProData.address === 'object'
+                    ? Object.entries(selectedProData.address).map(([key, value]) =>
+                        value ? `${key}: ${value} ` : ''
+                      ).join(', ')
+                    : String(selectedProData.address)}
+                </Text>
               </View>
+            )}
+            {selectedProData.notes && (
+              <View style={styles.detailRow}>
+                <Ionicons name="document-text" size={20} color="#666" />
+                <Text style={styles.detailText}>Notes : {selectedProData.notes}</Text>
+              </View>
+            )}
+            <View style={styles.detailRow}>
+              <Ionicons name="folder" size={20} color="#666" />
+              <Text style={styles.detailText}>{selectedProData.activeCases} cas actifs</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Ionicons name="calendar" size={20} color="#666" />
+              <Text style={styles.detailText}>
+                Inscrit le {new Date(selectedProData.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
+            
+            <Text style={styles.sectionTitle}>Documents de Vérification</Text>
+            <View style={styles.documentsContainer}>
+              {selectedProData.verificationDocuments?.length ? selectedProData.verificationDocuments.map((doc, index) => (
+                <TouchableOpacity 
+                  key={index}
+                  style={styles.documentItem}
+                >
+                  <Ionicons name="document-text" size={24} color="#666" />
+                  <Text style={styles.documentText}>Document {index + 1}</Text>
+                </TouchableOpacity>
+              )) : (
+                <Text style={styles.noDocumentsText}>Aucun document fourni</Text>
+              )}
+            </View>
 
-              <Text style={styles.sectionTitle}>Actions</Text>
-              <View style={styles.modalActions}>
-                {selectedPro.status === 'pending' && (
-                  <TouchableOpacity 
-                    style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
-                    onPress={() => {
-                      handleStatusChange(selectedPro.id, 'active');
-                      setModalVisible(false);
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>Approuver</Text>
-                  </TouchableOpacity>
-                )}
-                {selectedPro.status === 'active' && (
-                  <TouchableOpacity 
-                    style={[styles.actionButton, { backgroundColor: '#FFA000' }]}
-                    onPress={() => {
-                      Alert.alert(
-                        'Confirmation',
-                        'Êtes-vous sûr de vouloir suspendre ce professionnel ?',
-                        [
-                          {
-                            text: 'Annuler',
-                            style: 'cancel',
+            <Text style={styles.sectionTitle}>Actions</Text>
+            <View style={styles.modalActions}>
+              {selectedProData.status === 'pending' && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
+                  onPress={() => {
+                    handleStatusChange(selectedProData.id, 'active');
+                    setModalVisible(false);
+                    setSelectedProId(null);
+                    setSelectedProData(null);
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>Approuver</Text>
+                </TouchableOpacity>
+              )}
+              {selectedProData.status === 'active' && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#FFA000' }]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Confirmation',
+                      'Êtes-vous sûr de vouloir désactiver ce professionnel ?',
+                      [
+                        {
+                          text: 'Annuler',
+                          style: 'cancel',
+                        },
+                        {
+                          text: 'Désactiver',
+                          onPress: () => {
+                            handleStatusChange(selectedProData.id, 'inactive');
+                            setModalVisible(false);
+                            setSelectedProId(null);
+                            setSelectedProData(null);
                           },
-                          {
-                            text: 'Suspendre',
-                            onPress: () => {
-                              handleStatusChange(selectedPro.id, 'suspended');
-                              setModalVisible(false);
-                            },
-                            style: 'destructive',
-                          },
-                        ],
-                      );
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>Suspendre</Text>
-                  </TouchableOpacity>
-                )}
-                {selectedPro.status === 'suspended' && (
-                  <TouchableOpacity 
-                    style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
-                    onPress={() => {
-                      handleStatusChange(selectedPro.id, 'active');
-                      setModalVisible(false);
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>Réactiver</Text>
-                  </TouchableOpacity>
-                )}
-                {selectedPro.activeCases === 0 && (
-                  <TouchableOpacity 
-                    style={[styles.actionButton, { backgroundColor: '#f44336' }]}
-                    onPress={() => handleDeletePro(selectedPro.id)}
-                  >
-                    <Text style={styles.actionButtonText}>Supprimer</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </>
-          )}
+                          style: 'destructive',
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>Désactiver</Text>
+                </TouchableOpacity>
+              )}
+              {selectedProData.status === 'inactive' && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
+                  onPress={() => {
+                    handleStatusChange(selectedProData.id, 'active');
+                    setModalVisible(false);
+                    setSelectedProId(null);
+                    setSelectedProData(null);
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>Réactiver</Text>
+                </TouchableOpacity>
+              )}
+              {selectedProData.activeCases === 0 && (
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#f44336' }]}
+                  onPress={() => handleDeletePro(selectedProData.id)}
+                >
+                  <Text style={styles.actionButtonText}>Supprimer</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  };
 
   const handleExportData = async () => {
     try {
@@ -509,14 +658,14 @@ const ProManagementScreen: React.FC = () => {
         <TouchableOpacity
           style={[
             styles.filterButton,
-            filterStatus === 'suspended' && styles.filterButtonActive
+            filterStatus === 'inactive' && styles.filterButtonActive
           ]}
-          onPress={() => setFilterStatus('suspended')}
+          onPress={() => setFilterStatus('inactive')}
         >
           <Text style={[
             styles.filterButtonText,
-            filterStatus === 'suspended' && styles.filterButtonTextActive
-          ]}>Suspendus</Text>
+            filterStatus === 'inactive' && styles.filterButtonTextActive
+          ]}>Inactifs</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

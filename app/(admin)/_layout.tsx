@@ -119,6 +119,54 @@ function AlertIndicator() {
     notifyNewAlert();
   }, [hasActiveAlert, alertViewed]);
 
+  useEffect(() => {
+    if (!hasActiveAlert) {
+      // Arrêter le son et la vibration
+      if (soundRef.current) {
+        soundRef.current.stopAsync();
+        soundRef.current.unloadAsync();
+      }
+      if (vibrateIntervalRef.current) {
+        clearInterval(vibrateIntervalRef.current);
+      }
+      Vibration.cancel();
+    }
+  }, [hasActiveAlert]);
+
+  // Arrêt de sécurité lors du démontage du composant
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.stopAsync();
+        soundRef.current.unloadAsync();
+      }
+      if (vibrateIntervalRef.current) {
+        clearInterval(vibrateIntervalRef.current);
+      }
+      Vibration.cancel();
+    };
+  }, []);
+
+  // Timeout de sécurité : arrête tout après 1 minute si hasActiveAlert reste à true
+  useEffect(() => {
+    let timeout: NodeJS.Timeout | undefined;
+    if (hasActiveAlert) {
+      timeout = setTimeout(() => {
+        if (soundRef.current) {
+          soundRef.current.stopAsync();
+          soundRef.current.unloadAsync();
+        }
+        if (vibrateIntervalRef.current) {
+          clearInterval(vibrateIntervalRef.current);
+        }
+        Vibration.cancel();
+      }, 60000); // 1 minute
+    }
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [hasActiveAlert]);
+
   if (!hasActiveAlert || alertViewed) return null;
 
   return (

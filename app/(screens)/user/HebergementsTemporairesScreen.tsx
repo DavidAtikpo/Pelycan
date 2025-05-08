@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import apiService from '../../services/api';    
@@ -7,25 +7,44 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Hebergement {
     id: string;
-    nom: string;
-    type_hebergement: string;
-    adresse: string;
-    ville?: string;
-    code_postal?: string;
-    places_disponibles: number;
-    duree_max_sejour?: string;
-    public_cible?: string;
-    conditions_acces?: string;
-    services_inclus?: string;
+    titre: string;
     description: string;
-    image_url?: string;
+    adresse: string;
+    ville: string;
+    codePostal: string;
+    type: string;
+    capacite: number;
+    surface: number;
+    disponibilite: boolean;
+    status: string;
+    photos: string[];
+    typeHebergement: string;
+    dateDebut: string | null;
+    dateFin: string | null;
+    conditionsTemporaire: string | null;
+    dateCreation: string;
+    dateModification: string;
+    proprietaireId: string;
+    equipements: Record<string, boolean>;
 }
+
+const { width: screenWidth } = Dimensions.get('window');
 
 const HebergementsTemporairesScreen: React.FC = () => {
     const [hebergements, setHebergements] = useState<Hebergement[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [token, setToken] = useState<string | null>(null);
+    const [carouselIndexes, setCarouselIndexes] = useState<{ [hebergementId: string]: number }>({});
+    const [openHebergements, setOpenHebergements] = useState<string[]>([]);
+
+    const toggleHebergement = (id: string) => {
+        setOpenHebergements(prev =>
+            prev.includes(id)
+                ? prev.filter(hid => hid !== id)
+                : [...prev, id]
+        );
+    };
 
     // Récupération du token au chargement
     useEffect(() => {
@@ -53,17 +72,25 @@ const HebergementsTemporairesScreen: React.FC = () => {
                     const mockData = [
                         {
                             id: '1',
-                            nom: 'Centre d\'Hébergement Temporaire',
-                            type_hebergement: 'Urgence',
+                            titre: 'Centre d\'Hébergement Temporaire',
+                            description: 'Centre d\'accueil pour situations d\'urgence, ouvert 24h/24.',
                             adresse: '10 Rue de la Paix, 75001 Paris',
                             ville: 'Paris',
-                            code_postal: '75001',
-                            places_disponibles: 5,
-                            duree_max_sejour: '30 jours',
-                            public_cible: 'Tout public en situation d\'urgence',
-                            conditions_acces: 'Aucune condition particulière',
-                            services_inclus: 'Accompagnement social, Aide alimentaire',
-                            description: 'Centre d\'accueil pour situations d\'urgence, ouvert 24h/24.'
+                            codePostal: '75001',
+                            type: 'Urgence',
+                            capacite: 5,
+                            surface: 0,
+                            disponibilite: true,
+                            status: 'active',
+                            photos: [],
+                            typeHebergement: 'Urgence',
+                            dateDebut: null,
+                            dateFin: null,
+                            conditionsTemporaire: 'Aucune condition particulière',
+                            dateCreation: '2024-04-01',
+                            dateModification: '2024-04-01',
+                            proprietaireId: '',
+                            equipements: {}
                         },
                         // Ajoutez d'autres hébergements mockés si nécessaire
                     ];
@@ -138,74 +165,110 @@ const HebergementsTemporairesScreen: React.FC = () => {
 
         return (
             <ScrollView contentContainerStyle={styles.scrollContainer}>
-                {hebergements.map((hebergement) => (
-                    <View key={hebergement.id} style={styles.hebergementCard}>
-                        {hebergement.image_url && (
-                            <View style={styles.imageContainer}>
-                                <Image 
-                                    source={{ uri: hebergement.image_url }} 
-                                    style={styles.hebergementImage}
-                                    resizeMode="cover"
-                                />
-                            </View>
-                        )}
-                        
-                        <View style={styles.topSection}>
-                            <View>
-                                <Text style={styles.hebergementName}>{hebergement.nom}</Text>
-                                <View style={styles.badgeContainer}>
-                                    <View style={styles.typeBadge}>
-                                        <Text style={styles.typeBadgeText}>{hebergement.type_hebergement}</Text>
+                {hebergements.map((hebergement) => {
+                    const isOpen = openHebergements.includes(hebergement.id);
+                    return (
+                        <View key={hebergement.id} style={styles.hebergementCard}>
+                            {hebergement.photos && hebergement.photos.length > 0 && (
+                                <View style={styles.imageContainer}>
+                                    <ScrollView
+                                        horizontal
+                                        pagingEnabled
+                                        showsHorizontalScrollIndicator={false}
+                                        onScroll={e => {
+                                            const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+                                            setCarouselIndexes(prev => ({ ...prev, [hebergement.id]: idx }));
+                                        }}
+                                        scrollEventThrottle={16}
+                                    >
+                                        {hebergement.photos.map((photo, idx) => (
+                                            <Image
+                                                key={idx}
+                                                source={{ uri: photo }}
+                                                style={[styles.hebergementImage, { width: screenWidth }]}
+                                                resizeMode="cover"
+                                            />
+                                        ))}
+                                    </ScrollView>
+                                    <View style={styles.paginationContainer}>
+                                        {hebergement.photos.map((_, idx) => (
+                                            <View
+                                                key={idx}
+                                                style={[styles.paginationDot, (carouselIndexes[hebergement.id] || 0) === idx && styles.paginationDotActive]}
+                                            />
+                                        ))}
                                     </View>
                                 </View>
-                            </View>
-                            
-                            <View style={styles.disponibiliteContainer}>
-                                <Text style={styles.disponibiliteText}>
-                                    {hebergement.places_disponibles || 0} places
-                                </Text>
-                                <Text style={styles.disponibiliteLabel}>disponibles</Text>
-                            </View>
-                        </View>
-                        
-                        <View style={styles.infoRow}>
-                            <Ionicons name="location-outline" size={18} color="#D81B60" />
-                            <Text style={styles.infoText}>
-                                {hebergement.adresse}
-                                {hebergement.ville && hebergement.code_postal ? `, ${hebergement.code_postal} ${hebergement.ville}` : ''}
-                            </Text>
-                        </View>
-                        
-                        <Text style={styles.description}>{hebergement.description}</Text>
-                        
-                        {hebergement.services_inclus && (
-                            <View style={styles.sectionContainer}>
-                                <Text style={styles.sectionTitle}>Services inclus</Text>
-                                <View style={styles.tagsContainer}>
-                                    {hebergement.services_inclus.split(',').map((service, index) => (
-                                        <View key={index} style={styles.tag}>
-                                            <Text style={styles.tagText}>{service.trim()}</Text>
+                            )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <View>
+                                    <Text style={styles.hebergementName}>{hebergement.titre}</Text>
+                                    <View style={styles.badgeContainer}>
+                                        <View style={styles.typeBadge}>
+                                            <Text style={styles.typeBadgeText}>{hebergement.type}</Text>
                                         </View>
-                                    ))}
+                                    </View>
+                                    <Text style={styles.disponibiliteText}>{hebergement.capacite} places</Text>
                                 </View>
+                                <TouchableOpacity onPress={() => toggleHebergement(hebergement.id)}>
+                                    <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={24} color="#D81B60" />
+                                </TouchableOpacity>
                             </View>
-                        )}
-                        
-                        <TouchableOpacity
-                            style={styles.requestButton}
-                            onPress={() => router.push({ 
-                                pathname: '/(screens)/FaireDemandeScreen', 
-                                params: { 
-                                    centreType: hebergement.type_hebergement.toLowerCase(),
-                                    hebergementId: hebergement.id
-                                } 
-                            })}
-                        >
-                            <Text style={styles.requestButtonText}>Faire une demande</Text>
-                        </TouchableOpacity>
-                    </View>
-                ))}
-                
+                            {isOpen && (
+                                <>
+                                    <View style={styles.infoRow}>
+                                        <Ionicons name="location-outline" size={18} color="#D81B60" />
+                                        <Text style={styles.infoText}>
+                                            {hebergement.adresse}, {hebergement.codePostal} {hebergement.ville}
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.description}>{hebergement.description}</Text>
+                                    {(hebergement.dateDebut || hebergement.dateFin) && (
+                                        <View style={styles.sectionContainer}>
+                                            <Text style={styles.sectionTitle}>Disponibilité</Text>
+                                            <Text style={styles.infoText}>
+                                                {hebergement.dateDebut && `Du ${new Date(hebergement.dateDebut).toLocaleDateString()} `}
+                                                {hebergement.dateFin && `au ${new Date(hebergement.dateFin).toLocaleDateString()}`}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    {hebergement.conditionsTemporaire && (
+                                        <View style={styles.sectionContainer}>
+                                            <Text style={styles.sectionTitle}>Conditions</Text>
+                                            <Text style={styles.infoText}>{hebergement.conditionsTemporaire}</Text>
+                                        </View>
+                                    )}
+                                    {hebergement.equipements && Object.keys(hebergement.equipements).length > 0 && (
+                                        <View style={styles.sectionContainer}>
+                                            <Text style={styles.sectionTitle}>Équipements</Text>
+                                            <View style={styles.tagsContainer}>
+                                                {Object.entries(hebergement.equipements).map(([key, value]) => (
+                                                    value && (
+                                                        <View key={key} style={styles.tag}>
+                                                            <Text style={styles.tagText}>{key}</Text>
+                                                        </View>
+                                                    )
+                                                ))}
+                                            </View>
+                                        </View>
+                                    )}
+                                    <TouchableOpacity
+                                        style={styles.requestButton}
+                                        onPress={() => router.push({ 
+                                            pathname: '/(screens)/FaireDemandeScreen', 
+                                            params: { 
+                                                centreType: hebergement.type.toLowerCase(),
+                                                logementId: hebergement.id
+                                            } 
+                                        })}
+                                    >
+                                        <Text style={styles.requestButtonText}>Faire une demande</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                        </View>
+                    );
+                })}
                 <View style={styles.footer}>
                     <Text style={styles.footerText}>
                         Pour toute question sur les hébergements temporaires, contactez-nous au numéro d'urgence
@@ -426,6 +489,22 @@ const styles = StyleSheet.create({
         width: '100%',
         height: 180,
         backgroundColor: '#f0f0f0',
+    },
+    paginationContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    paginationDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#ccc',
+        marginHorizontal: 3,
+    },
+    paginationDotActive: {
+        backgroundColor: '#D81B60',
     },
 });
 

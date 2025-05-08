@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Image, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import apiService from '../../services/api';
@@ -15,20 +15,25 @@ interface Logement {
     code_postal?: string;
     type_logement: string;
     nombre_pieces?: string;
-    superficie?: string;
-    loyer?: number;
+    surface?: string;
     charges?: number;
     disponibilite: string;
     description: string;
     photos?: string[];
     permission: boolean;
+    capacite?: number;
+    equipements?: { [key: string]: any };
 }
+
+const { width: screenWidth } = Dimensions.get('window');
 
 const LogementsDisponiblesScreen: React.FC = () => {
     const [logements, setLogements] = useState<Logement[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [token, setToken] = useState<string | null>(null);
+    const [carouselIndexes, setCarouselIndexes] = useState<{ [logementId: string]: number }>({});
+    const [openLogements, setOpenLogements] = useState<string[]>([]);
 
     // Récupération du token au chargement
     useEffect(() => {
@@ -121,61 +126,110 @@ const LogementsDisponiblesScreen: React.FC = () => {
         }
     };
 
-    const renderLogement = ({ item }: { item: Logement }) => (
-        <View style={styles.logementCard}>
-            {item.photos && item.photos.length > 0 && (
-                <View style={styles.imageContainer}>
-                    <Image 
-                        source={{ uri: item.photos[0] }} 
-                        style={styles.logementImage}
-                        resizeMode="cover"
-                    />
-                </View>
-            )}
-            <Text style={styles.logementNom}>{item.titre}</Text>
-            <View style={styles.infoContainer}>
-                <View style={styles.infoRow}>
-                    <Ionicons name="location-outline" size={20} color="#D81B60" />
-                    <Text style={styles.infoText}>{item.adresse}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                    <Ionicons name="home-outline" size={20} color="#D81B60" />
-                    <Text style={styles.infoText}>{item.type_logement} • {item.nombre_pieces} pièces</Text>
-                </View>
-                {item.superficie && (
-                    <View style={styles.infoRow}>
-                        <Ionicons name="resize-outline" size={20} color="#D81B60" />
-                        <Text style={styles.infoText}>Superficie: {item.superficie} m²</Text>
+    const toggleLogement = (id: string) => {
+        setOpenLogements(prev =>
+            prev.includes(id)
+                ? prev.filter(lid => lid !== id)
+                : [...prev, id]
+        );
+    };
+
+    const renderLogement = ({ item }: { item: Logement }) => {
+        const isOpen = openLogements.includes(item.id);
+        return (
+            <View style={styles.logementCard}>
+                {item.photos && item.photos.length > 0 && (
+                    <View style={styles.imageContainer}>
+                        <ScrollView
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            style={{ flex: 1 }}
+                            onScroll={e => {
+                                const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+                                setCarouselIndexes(prev => ({ ...prev, [item.id]: idx }));
+                            }}
+                            scrollEventThrottle={16}
+                        >
+                            {item.photos.map((photo, idx) => (
+                                <Image
+                                    key={idx}
+                                    source={{ uri: photo }}
+                                    style={{ width: screenWidth, height: 150 }}
+                                    resizeMode="cover"
+                                />
+                            ))}
+                        </ScrollView>
+                        <View style={styles.paginationContainer}>
+                            {item.photos.map((_, idx) => (
+                                <View
+                                    key={idx}
+                                    style={[styles.paginationDot, (carouselIndexes[item.id] || 0) === idx && styles.paginationDotActive]}
+                                />
+                            ))}
+                        </View>
                     </View>
                 )}
-                {(item.loyer || item.charges) && (
-                    <View style={styles.infoRow}>
-                        <Ionicons name="cash-outline" size={20} color="#D81B60" />
-                        <Text style={styles.infoText}>
-                            {item.loyer && `Loyer: ${item.loyer}€`}
-                            {item.loyer && item.charges && ' • '}
-                            {item.charges && `Charges: ${item.charges}€`}
-                        </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View>
+                        <Text style={styles.logementNom}>{item.titre}</Text>
+                        <View style={styles.badgeContainer}>
+                            <View style={styles.typeBadge}>
+                                <Text style={styles.typeBadgeText}>{item.type_logement}</Text>
+                            </View>
+                        </View>
+                        <Text style={styles.disponibiliteText}>{item.capacite ? `${item.capacite} places` : ''}{item.ville ? ` • ${item.ville}` : ''}</Text>
                     </View>
-                )}
-                <View style={styles.infoRow}>
-                    <Ionicons name="time-outline" size={20} color="#D81B60" />
-                    <Text style={styles.infoText}>Disponibilité: {item.disponibilite}</Text>
+                    <TouchableOpacity onPress={() => toggleLogement(item.id)}>
+                        <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={24} color="#D81B60" />
+                    </TouchableOpacity>
                 </View>
-                <Text style={styles.description}>{item.description}</Text>
+                {isOpen && (
+                    <>
+                        <View style={styles.infoRow}>
+                            <Ionicons name="location-outline" size={18} color="#D81B60" />
+                            <Text style={styles.infoText}>{item.adresse}{item.code_postal ? `, ${item.code_postal}` : ''}{item.ville ? ` ${item.ville}` : ''}</Text>
+                        </View>
+                        <Text style={styles.description}>{item.description}</Text>
+                        <View style={styles.infoRow}>
+                            <Ionicons name="time-outline" size={18} color="#D81B60" />
+                            <Text style={styles.infoText}>Disponibilité: {item.disponibilite}</Text>
+                        </View>
+                        {item.surface && (
+                            <View style={styles.infoRow}>
+                                <Ionicons name="resize-outline" size={18} color="#D81B60" />
+                                <Text style={styles.infoText}>Surface: {item.surface} m²</Text>
+                            </View>
+                        )}
+                        {item.equipements && Object.keys(item.equipements).length > 0 && (
+                            <View style={styles.sectionContainer}>
+                                <Text style={styles.sectionTitle}>Équipements</Text>
+                                <View style={styles.tagsContainer}>
+                                    {Object.entries(item.equipements).map(([key, value]) => (
+                                        value && (
+                                            <View key={key} style={styles.tag}>
+                                                <Text style={styles.tagText}>{key}</Text>
+                                            </View>
+                                        )
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+                        <TouchableOpacity
+                            style={styles.demandeButton}
+                            onPress={() => router.push({
+                                pathname: '/(screens)/FaireDemandeScreen',
+                                params: { logementId: item.id }
+                            })}
+                        >
+                            <Ionicons name="create-outline" size={24} color="#fff" />
+                            <Text style={styles.buttonText}>Faire une demande</Text>
+                        </TouchableOpacity>
+                    </>
+                )}
             </View>
-            <TouchableOpacity
-                style={styles.demandeButton}
-                onPress={() => router.push({
-                    pathname: '/(screens)/FaireDemandeScreen',
-                    params: { logementId: item.id }
-                })}
-            >
-                <Ionicons name="create-outline" size={24} color="#fff" />
-                <Text style={styles.buttonText}>Faire une demande</Text>
-            </TouchableOpacity>
-        </View>
-    );
+        );
+    };
 
     const renderContent = () => {
         if (loading) {
@@ -367,6 +421,68 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         backgroundColor: '#f0f0f0',
+    },
+    paginationContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    paginationDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#ccc',
+        marginHorizontal: 4,
+    },
+    paginationDotActive: {
+        backgroundColor: '#D81B60',
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    tag: {
+        backgroundColor: '#F0F0F0',
+        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        marginRight: 8,
+        marginBottom: 8,
+    },
+    tagText: {
+        color: '#666',
+        fontSize: 12,
+    },
+    sectionContainer: {
+        marginTop: 5,
+        marginBottom: 10,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#333',
+        marginBottom: 8,
+    },
+    badgeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    typeBadge: {
+        backgroundColor: '#F0F0F0',
+        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        marginRight: 8,
+    },
+    typeBadgeText: {
+        color: '#666',
+        fontSize: 12,
+    },
+    disponibiliteText: {
+        color: '#666',
+        fontSize: 12,
     },
 });
 

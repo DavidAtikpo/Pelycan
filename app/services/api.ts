@@ -680,12 +680,14 @@ const creerLogement = async (logementData: Logement): Promise<Logement> => {
     
     if (!token) {
       console.error('❌ ERREUR: Aucun token d\'authentification trouvé malgré la vérification.');
-      // Dans une application plus avancée, vous pourriez implémenter une tentative de réauthentification ici
       throw new Error('Erreur d\'authentification. Veuillez vous reconnecter et réessayer.');
     }
     
-    // Convertir les équipements en chaîne de caractères séparée par des virgules
-    const equipementsString = logementData.equipements.join(',');
+    // Convertir les équipements en format JSONB
+    const equipementsJson: Record<string, boolean> = logementData.equipements.reduce((acc, equipement) => {
+      acc[equipement] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
     
     // Adapter le format des données au format attendu par le serveur
     const logementServeur = {
@@ -703,7 +705,7 @@ const creerLogement = async (logementData: Logement): Promise<Logement> => {
       date_debut: logementData.date_debut,
       date_fin: logementData.date_fin,
       conditions_temporaire: logementData.conditions_temporaire,
-      equipements: equipementsString
+      equipements: equipementsJson
     };
     
     console.log('==========================================');

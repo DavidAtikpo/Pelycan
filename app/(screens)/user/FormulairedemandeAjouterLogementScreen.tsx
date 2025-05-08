@@ -220,38 +220,95 @@ const AjouterLogementScreen: React.FC = () => {
 
     // Soumettre la demande finale
     const soumettreDemande = async () => {
-        if (!validerFormulaire()) return;
+        if (!validerFormulaire()) {
+            console.log('Validation du formulaire échouée');
+            return;
+        }
         
         setLoading(true);
         
         try {
-            // Créer l'objet demande
-            const demande: Omit<DemandeAjoutLogement, 'id'> = {
+            console.log('=== Début de la soumission de la demande ===');
+            console.log('Configuration API:', {
+                API_URL,
+                endpoint: `${API_URL}/demandes-ajout-logement`
+            });
+
+            // Vérifier le token
+            const token = await AsyncStorage.getItem('userToken');
+            console.log('Token d\'authentification:', token ? 'présent' : 'absent');
+            if (!token) {
+                throw new Error('Token d\'authentification manquant');
+            }
+
+            console.log('Données du formulaire:', {
                 nom,
                 prenom,
                 telephone,
                 email,
-                justificatif: '', // À implémenter avec upload de document
-                statut: 'en_attente',
-                dateCreation: new Date(),
                 raisonDemande,
                 estProprio,
-                informationsPersonnelles: estProprio ? informationsPersonnelles : undefined
+                informationsPersonnelles: {
+                    ...informationsPersonnelles,
+                    // Ne pas logger les données sensibles
+                    bulletinsSalaire: informationsPersonnelles.bulletinsSalaire.length,
+                    contratTravail: informationsPersonnelles.contratTravail.length,
+                    quittancesLoyer: informationsPersonnelles.quittancesLoyer.length,
+                    justificatifPriseEnCharge: informationsPersonnelles.justificatifPriseEnCharge.length,
+                    pieceIdentite: informationsPersonnelles.pieceIdentite.length,
+                    livretFamille: informationsPersonnelles.livretFamille.length,
+                    notificationCaf: informationsPersonnelles.notificationCaf.length
+                }
+            });
+
+            // Préparer les données de la demande
+            const demandeData = {
+                nom,
+                prenom,
+                telephone,
+                email,
+                raisonDemande,
+                estProprio,
+                informationsPersonnelles, // doit contenir tous les sous-champs
+                // ...ajoute ici tout autre champ à enregistrer
             };
-            
+
+            console.log('Données préparées pour l\'envoi:', {
+                ...demandeData,
+                informationsPersonnelles: demandeData.informationsPersonnelles ? {
+                    ...demandeData.informationsPersonnelles,
+                    bulletinsSalaire: demandeData.informationsPersonnelles.bulletinsSalaire.length,
+                    contratTravail: demandeData.informationsPersonnelles.contratTravail.length,
+                    quittancesLoyer: demandeData.informationsPersonnelles.quittancesLoyer.length,
+                    justificatifPriseEnCharge: demandeData.informationsPersonnelles.justificatifPriseEnCharge.length,
+                    pieceIdentite: demandeData.informationsPersonnelles.pieceIdentite.length,
+                    livretFamille: demandeData.informationsPersonnelles.livretFamille.length,
+                    notificationCaf: demandeData.informationsPersonnelles.notificationCaf.length
+                } : undefined
+            });
+
             // Envoyer la demande à l'API
+            console.log('Envoi de la demande à l\'API...');
             const response = await fetch(`${API_URL}/demandes-ajout-logement`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${await AsyncStorage.getItem('userToken')}`
+                    'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(demande)
+                body: JSON.stringify(demandeData)
+            });
+
+            console.log('Réponse de l\'API:', {
+                status: response.status,
+                statusText: response.statusText,
+                headers: Object.fromEntries(response.headers.entries())
             });
 
             const data = await response.json();
+            console.log('Données de réponse:', data);
+
             if (response.ok) {
-                // Stocker l'ID de la demande localement pour récupérer son statut ultérieurement
+                console.log('Demande créée avec succès:', data.id);
                 await AsyncStorage.setItem('demandeAjoutLogementId', data.id);
                 
                 setDemandeId(data.id);
@@ -261,19 +318,24 @@ const AjouterLogementScreen: React.FC = () => {
                 
                 Alert.alert(
                     'Demande envoyée',
-                    'Votre demande a été enregistrée avec succès dans notre base de données. Un administrateur va examiner votre demande et vous recevrez une notification quand elle sera traitée.',
+                    'Votre demande a été enregistrée avec succès. Un administrateur va examiner votre demande et vous recevrez une notification quand elle sera traitée.',
                     [{ text: 'OK' }]
                 );
             } else {
-                // Enregistrer localement en cas d'échec de l'API comme solution de secours
-                const demandeLocale = { ...demande, id: Date.now().toString() };
+                console.error('Erreur de l\'API:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data
+                });
+
+                // Enregistrer localement en cas d'échec
+                const demandeLocale = { ...demandeData, id: Date.now().toString() };
                 await AsyncStorage.setItem('demandeAjoutLogement', JSON.stringify(demandeLocale));
                 
                 setDemandeEnvoyee(true);
                 setStatut('en_attente');
                 setDonneesStockees(true);
                 
-                console.warn("Fallback: stockage local utilisé car l'API a échoué");
                 Alert.alert(
                     'Demande enregistrée localement',
                     'Votre demande a été enregistrée localement. Elle sera synchronisée avec le serveur dès que possible.',
@@ -281,13 +343,20 @@ const AjouterLogementScreen: React.FC = () => {
                 );
             }
         } catch (error) {
-            console.error('Erreur lors de l\'envoi de la demande:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue';
+            console.error('Erreur détaillée:', {
+                message: errorMessage,
+                stack: error instanceof Error ? error.stack : undefined,
+                name: error instanceof Error ? error.name : 'UnknownError'
+            });
+            
             Alert.alert(
                 'Erreur',
-                'Une erreur est survenue lors de l\'envoi de votre demande. Veuillez réessayer plus tard.'
+                `Une erreur est survenue lors de l'envoi de votre demande: ${errorMessage}`
             );
         } finally {
             setLoading(false);
+            console.log('=== Fin de la soumission de la demande ===');
         }
     };
 
@@ -321,31 +390,42 @@ const AjouterLogementScreen: React.FC = () => {
         }
     };
 
-    // Fonction pour réessayer l'envoi des données
+    // Fonction pour réessayer l'envoi
     const reessayerEnvoi = async () => {
         try {
             setLoading(true);
+            console.log('Tentative de réenvoi de la demande...');
             
             // Récupérer les données stockées localement
             const demandeStockee = await AsyncStorage.getItem('demandeAjoutLogement');
             if (!demandeStockee) {
+                console.error('Aucune donnée stockée trouvée');
                 Alert.alert('Erreur', 'Aucune donnée stockée trouvée');
                 return;
             }
 
             const demande = JSON.parse(demandeStockee);
-            
+            console.log('Données récupérées du stockage local:', demande);
+
+            // Récupérer le token
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token) {
+                throw new Error('Token d\'authentification manquant');
+            }
+
             // Envoyer la demande à l'API
             const response = await fetch(`${API_URL}/demandes-ajout-logement`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${await AsyncStorage.getItem('userToken')}`
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify(demande)
             });
 
             const data = await response.json();
+            console.log('Réponse de l\'API lors du réenvoi:', data);
+
             if (response.ok) {
                 // Supprimer les données stockées localement
                 await AsyncStorage.removeItem('demandeAjoutLogement');
@@ -362,75 +442,70 @@ const AjouterLogementScreen: React.FC = () => {
                     [{ text: 'OK' }]
                 );
             } else {
-                Alert.alert(
-                    'Erreur',
-                    'L\'envoi a échoué. Les données restent stockées localement.',
-                    [{ text: 'OK' }]
-                );
+                throw new Error(data.message || 'Erreur lors de l\'envoi');
             }
         } catch (error) {
-            console.error('Erreur lors de la réessai:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue';
+            console.error('Erreur lors de la réessai:', errorMessage);
             Alert.alert(
                 'Erreur',
-                'Une erreur est survenue lors de la réessai. Les données restent stockées localement.',
-                [{ text: 'OK' }]
+                `L'envoi a échoué: ${errorMessage}`
             );
         } finally {
             setLoading(false);
         }
     };
 
-    // Ajouter la fonction d'annulation
+    // Fonction pour annuler la demande
     const annulerDemande = async () => {
-        if (!demandeId) return;
-        
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/demandes-ajout-logement/${demandeId}/cancel`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${await AsyncStorage.getItem('userToken')}`
-                }
+            console.log('Tentative d\'annulation de la demande...');
+
+            // Supprimer les données stockées localement
+            await AsyncStorage.removeItem('demandeAjoutLogement');
+            await AsyncStorage.removeItem('demandeAjoutLogementId');
+            
+            // Réinitialiser tous les états
+            setDemandeEnvoyee(false);
+            setDemandeId(null);
+            setStatut(null);
+            setQuestionnaireComplete(false);
+            setDonneesStockees(false);
+            setNom('');
+            setPrenom('');
+            setTelephone('');
+            setEmail('');
+            setRaisonDemande('');
+            setEstProprio(false);
+            setInformationsPersonnelles({
+                profession: '',
+                numeroPieceIdentite: '',
+                bulletinsSalaire: [],
+                contratTravail: [],
+                numeroDemandeLogement: '',
+                numeroDalo: '',
+                quittancesLoyer: [],
+                justificatifPriseEnCharge: [],
+                pieceIdentite: [],
+                numeroSecu: '',
+                nombrePersonnes: '',
+                livretFamille: [],
+                notificationCaf: [],
+                accepteConditions: false
             });
             
-            if (response.ok) {
-                // Supprimer les données stockées localement
-                await AsyncStorage.removeItem('demandeAjoutLogement');
-                await AsyncStorage.removeItem('demandeAjoutLogementId');
-                
-                setDemandeEnvoyee(false);
-                setDemandeId(null);
-                setStatut(null);
-                setQuestionnaireComplete(false);
-                setDonneesStockees(false);
-                
-                // Réinitialiser les champs du formulaire
-                setNom('');
-                setPrenom('');
-                setTelephone('');
-                setEmail('');
-                setRaisonDemande('');
-                setEstProprio(false);
-                
-                Alert.alert(
-                    'Demande annulée',
-                    'Votre demande a été annulée avec succès.',
-                    [{ text: 'OK' }]
-                );
-            } else {
-                Alert.alert(
-                    'Erreur',
-                    'Une erreur est survenue lors de l\'annulation de la demande.',
-                    [{ text: 'OK' }]
-                );
-            }
+            Alert.alert(
+                'Demande annulée',
+                'Votre demande a été annulée avec succès. Vous pouvez recommencer une nouvelle demande.',
+                [{ text: 'OK' }]
+            );
         } catch (error) {
-            console.error('Erreur lors de l\'annulation de la demande:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue';
+            console.error('Erreur lors de l\'annulation:', errorMessage);
             Alert.alert(
                 'Erreur',
-                'Une erreur est survenue lors de l\'annulation de la demande.',
-                [{ text: 'OK' }]
+                `Une erreur est survenue lors de l'annulation: ${errorMessage}`
             );
         } finally {
             setLoading(false);
@@ -536,7 +611,7 @@ const AjouterLogementScreen: React.FC = () => {
             } else {
                 const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
                 if (status !== 'granted') {
-                    Alert.alert('Permission refusée', 'Nous avons besoin de votre autorisation pour accéder à vos photos.');
+                    Alert.alert('Permission refusée', 'Nous avons besoin de votre autorisation pour accéder à vos documents.');
                     return;
                 }
             }
@@ -545,13 +620,12 @@ const AjouterLogementScreen: React.FC = () => {
                 ? ImagePicker.launchCameraAsync({
                     allowsEditing: true,
                     aspect: [4, 3],
-                    quality: 0.8,
+                    quality: 0.5
                 }) 
                 : ImagePicker.launchImageLibraryAsync({
-                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
                     allowsEditing: true,
                     aspect: [4, 3],
-                    quality: 0.8,
+                    quality: 0.5
                 }));
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -619,7 +693,7 @@ const AjouterLogementScreen: React.FC = () => {
                             {statut === 'approuvee' 
                                 ? 'Votre demande a été approuvée. Vous pouvez maintenant ajouter votre logement.' 
                                 : statut === 'refusee' 
-                                ? 'Votre demande a été refusée. Veuillez contacter notre service client pour plus d\'informations.' 
+                                ? 'Votre demande a été refusée. Veuillez consulter votre boite mail pour plus d\'informations.' 
                                 : 'Votre demande est en cours d\'examen. Vous recevrez une notification dès qu\'elle sera traitée.'}
                         </Text>
                         
@@ -996,6 +1070,7 @@ const AjouterLogementScreen: React.FC = () => {
                                 placeholder="Nombre de personnes occupant le logement"
                                 value={informationsPersonnelles.nombrePersonnes}
                                 onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, nombrePersonnes: value }))}
+                                keyboardType="numeric"
                             />
 
                             <Text style={styles.label}>Livret de famille <Text style={styles.requiredField}>*</Text></Text>
@@ -1321,6 +1396,7 @@ const AjouterLogementScreen: React.FC = () => {
                             placeholder="Nombre de personnes occupant le logement"
                             value={informationsPersonnelles.nombrePersonnes}
                             onChangeText={(value) => setInformationsPersonnelles(prev => ({ ...prev, nombrePersonnes: value }))}
+                            keyboardType="numeric"
                         />
 
                         <Text style={styles.label}>Livret de famille <Text style={styles.requiredField}>*</Text></Text>

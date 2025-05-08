@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { API_URL } from '../../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,16 +23,25 @@ export default function AlertsScreen() {
   const [selectedAlert, setSelectedAlert] = useState<AlertData | null>(null);
   const [message, setMessage] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 30000); // Rafraîchir toutes les 30 secondes
+    const interval = setInterval(fetchAlerts, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchAlerts = async () => {
     try {
+      setIsLoading(true);
+      setError(null);
       const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        throw new Error('Token non trouvé');
+      }
+
       const response = await fetch(`${API_URL}/alerts`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -42,9 +51,21 @@ export default function AlertsScreen() {
       if (response.ok) {
         const data = await response.json();
         setAlerts(data.alerts);
+        setRetryCount(0); // Réinitialiser le compteur en cas de succès
+      } else {
+        throw new Error('Erreur lors de la récupération des alertes');
       }
     } catch (error) {
       console.error('Erreur lors de la récupération des alertes:', error);
+      setError('Impossible de charger les alertes. Veuillez réessayer.');
+      
+      // Logique de reconnexion avec un maximum de 3 tentatives
+      if (retryCount < 3) {
+        setRetryCount(prev => prev + 1);
+        setTimeout(fetchAlerts, 5000); // Réessayer après 5 secondes
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -111,80 +132,104 @@ export default function AlertsScreen() {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={alerts}
-        renderItem={renderAlertItem}
-        keyExtractor={(item) => item.id}
-        style={styles.list}
-      />
-
-      <Modal
-        visible={isModalVisible}
-        animationType="slide"
-        onRequestClose={() => setIsModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <TouchableOpacity 
-            style={styles.closeButton}
-            onPress={() => setIsModalVisible(false)}
-          >
-            <Ionicons name="close" size={24} color="#000" />
-          </TouchableOpacity>
-
-          {selectedAlert && (
-            <>
-              <Text style={styles.modalTitle}>
-                Alerte de {selectedAlert.userName}
-              </Text>
-
-              <MapView
-                style={styles.map}
-                initialRegion={{
-                  latitude: selectedAlert.location.latitude,
-                  longitude: selectedAlert.location.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-              >
-                <Marker
-                  coordinate={{
-                    latitude: selectedAlert.location.latitude,
-                    longitude: selectedAlert.location.longitude,
-                  }}
-                  title={`Position de ${selectedAlert.userName}`}
-                />
-              </MapView>
-
-              <View style={styles.messageContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Envoyer un message à la victime..."
-                  value={message}
-                  onChangeText={setMessage}
-                  multiline
-                />
-                <TouchableOpacity 
-                  style={styles.sendButton}
-                  onPress={handleSendMessage}
-                >
-                  <Text style={styles.sendButtonText}>Envoyer</Text>
-                </TouchableOpacity>
-              </View>
-
-              {selectedAlert.status === 'active' && (
-                <TouchableOpacity 
-                  style={styles.processButton}
-                  onPress={() => handleProcessAlert(selectedAlert.id)}
-                >
-                  <Text style={styles.processButtonText}>
-                    Marquer comme traité
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0000ff" />
+          <Text style={styles.loadingText}>Chargement des alertes...</Text>
         </View>
-      </Modal>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={fetchAlerts}
+          >
+            <Text style={styles.retryButtonText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          <FlatList
+            data={alerts}
+            renderItem={renderAlertItem}
+            keyExtractor={(item) => item.id}
+            style={styles.list}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>Aucune alerte à afficher</Text>
+              </View>
+            }
+          />
+
+          <Modal
+            visible={isModalVisible}
+            animationType="slide"
+            onRequestClose={() => setIsModalVisible(false)}
+          >
+            <View style={styles.modalContainer}>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setIsModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color="#000" />
+              </TouchableOpacity>
+
+              {selectedAlert && (
+                <>
+                  <Text style={styles.modalTitle}>
+                    Alerte de {selectedAlert.userName}
+                  </Text>
+
+                  <MapView
+                    style={styles.map}
+                    initialRegion={{
+                      latitude: selectedAlert.location.latitude,
+                      longitude: selectedAlert.location.longitude,
+                      latitudeDelta: 0.01,
+                      longitudeDelta: 0.01,
+                    }}
+                  >
+                    <Marker
+                      coordinate={{
+                        latitude: selectedAlert.location.latitude,
+                        longitude: selectedAlert.location.longitude,
+                      }}
+                      title={`Position de ${selectedAlert.userName}`}
+                    />
+                  </MapView>
+
+                  <View style={styles.messageContainer}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Envoyer un message à la victime..."
+                      value={message}
+                      onChangeText={setMessage}
+                      multiline
+                    />
+                    <TouchableOpacity 
+                      style={styles.sendButton}
+                      onPress={handleSendMessage}
+                    >
+                      <Text style={styles.sendButtonText}>Envoyer</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {selectedAlert.status === 'active' && (
+                    <TouchableOpacity 
+                      style={styles.processButton}
+                      onPress={() => handleProcessAlert(selectedAlert.id)}
+                    >
+                      <Text style={styles.processButtonText}>
+                        Marquer comme traité
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+          </Modal>
+        </>
+      )}
     </View>
   );
 }
@@ -270,5 +315,46 @@ const styles = StyleSheet.create({
   processButtonText: {
     color: '#FFF',
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#FF0000',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2196F3',
+    padding: 10,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
   },
 }); 
