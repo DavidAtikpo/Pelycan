@@ -68,6 +68,9 @@ const TaskAssignmentScreen: React.FC = () => {
   const fetchProfessionals = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
+      console.log('Token récupéré:', token ? 'Présent' : 'Absent');
+      
+      console.log('Envoi de la requête pour récupérer les professionnels...');
       const response = await fetch(`${API_URL}/admin/professionals/available`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -75,12 +78,18 @@ const TaskAssignmentScreen: React.FC = () => {
         },
       });
 
+      console.log('Statut de la réponse:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Erreur de réponse:', errorData);
         throw new Error(errorData.message || 'Erreur lors de la récupération des professionnels');
       }
 
       const data = await response.json();
+      console.log('Données reçues:', data);
+      console.log('Nombre de professionnels:', data.length);
+      
       setProfessionals(data);
     } catch (error) {
       console.error('Erreur lors de la récupération des professionnels:', error);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Alert, TouchableOpacity, Image, ImageBackground, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { useRouter, Link, usePathname } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
@@ -16,6 +16,7 @@ const LoginScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const router = useRouter();
+  const currentPath = usePathname();
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
@@ -25,7 +26,7 @@ const LoginScreen: React.FC = () => {
   useEffect(() => {
     checkBiometricAvailability();
     checkStoredData();
-    checkIfUserIsLoggedIn();
+    checkIfUserIsLoggedIn(currentPath);
     testAsyncStoragePersistence();
   }, []);
 
@@ -41,7 +42,39 @@ const LoginScreen: React.FC = () => {
 
   const checkStoredData = async () => {
     try {
-      // Vérifier les données stockées individuellement
+      // Vérifier les données stockées en JSON
+      const storedUserData = await AsyncStorage.getItem('userData');
+      if (storedUserData) {
+        try {
+          const userData = JSON.parse(storedUserData);
+          console.log('Données stockées au chargement (JSON):', userData);
+          
+          // Synchroniser les données individuelles avec les données JSON
+          if (userData.token) {
+            await AsyncStorage.setItem('userToken', userData.token);
+          }
+          if (userData.role) {
+            await AsyncStorage.setItem('userRole', userData.role);
+          }
+          if (userData.email) {
+            await AsyncStorage.setItem('userEmail', userData.email);
+            setEmail(userData.email);
+          }
+          if (userData.id) {
+            await AsyncStorage.setItem('userId', userData.id);
+          }
+          if (userData.firstName) {
+            await AsyncStorage.setItem('userFirstName', userData.firstName);
+          }
+          if (userData.lastName) {
+            await AsyncStorage.setItem('userLastName', userData.lastName);
+          }
+        } catch (error) {
+          console.error('Erreur lors du parsing des données JSON:', error);
+        }
+      }
+
+      // Vérifier les données stockées individuellement après synchronisation
       const storedEmail = await AsyncStorage.getItem('userEmail');
       const storedToken = await AsyncStorage.getItem('userToken');
       const storedRole = await AsyncStorage.getItem('userRole');
@@ -52,35 +85,21 @@ const LoginScreen: React.FC = () => {
         role: storedRole
       });
       
-      // Vérifier les données stockées en JSON
-      const storedUserData = await AsyncStorage.getItem('userData');
-      if (storedUserData) {
-        try {
-          const userData = JSON.parse(storedUserData);
-          console.log('Données stockées au chargement (JSON):', userData);
-          
-          // Si l'email individuel n'est pas disponible mais présent dans l'objet JSON
-          if (!storedEmail && userData.email) {
-            console.log('Récupération de l\'email depuis l\'objet JSON');
-            setEmail(userData.email);
-          }
-        } catch (error) {
-          console.error('Erreur lors du parsing des données JSON:', error);
-        }
-      } else {
-        console.log('Aucune donnée JSON stockée');
-      }
-      
-      if (storedEmail) {
-        setEmail(storedEmail);
-      }
     } catch (error) {
       console.error('Erreur lors de la vérification des données stockées:', error);
     }
   };
 
-  const checkIfUserIsLoggedIn = async () => {
+  const checkIfUserIsLoggedIn = async (path: string | null) => {
     try {
+      // Vérifier si on navigue depuis une notification
+      const navigatingFromNotification = await AsyncStorage.getItem('navigatingFromNotification');
+      if (navigatingFromNotification === 'true') {
+        // Supprimer le flag de navigation
+        await AsyncStorage.removeItem('navigatingFromNotification');
+        return; // Ne pas rediriger si on vient d'une notification
+      }
+
       // Récupérer les données de l'utilisateur depuis l'objet JSON
       const storedUserData = await AsyncStorage.getItem('userData');
       
@@ -90,53 +109,42 @@ const LoginScreen: React.FC = () => {
           console.log('Données utilisateur trouvées:', userData);
 
           if (userData.token && userData.role) {
-            // Vérifier si le token est toujours valide
-            try {
-              const response = await fetch(`${API_URL}/auth/verify-token`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${userData.token}`,
-                  'Content-Type': 'application/json'
-                }
-              });
+            // Stocker les données individuellement pour la compatibilité
+            await AsyncStorage.setItem('userToken', userData.token);
+            await AsyncStorage.setItem('userRole', userData.role);
+            await AsyncStorage.setItem('userId', userData.id);
+            await AsyncStorage.setItem('userEmail', userData.email);
+            await AsyncStorage.setItem('userFirstName', userData.firstName);
+            await AsyncStorage.setItem('userLastName', userData.lastName);
 
-              if (response.ok) {
-                console.log('Token valide, redirection...');
-                // Rediriger l'utilisateur en fonction de son rôle
-                switch (userData.role) {
-                  case 'admin':
-                    router.replace('/(admin)/DashboardScreen');
-                    break;
-                  case 'pro':
-                    router.replace('/(pro)/DashboardScreen');
-                    break;
-                  default:
-                    router.replace('/(app)/HomeScreen');
-                }
-              } else {
-                // Token invalide, supprimer les données stockées
-                console.log('Token invalide, suppression des données...');
-                await AsyncStorage.removeItem('userData');
-                await AsyncStorage.removeItem('userToken');
-                await AsyncStorage.removeItem('userRole');
-                await AsyncStorage.removeItem('userEmail');
-              }
-            } catch (error) {
-              console.error('Erreur lors de la vérification du token:', error);
-              // En cas d'erreur réseau, supprimer les données stockées
-              await AsyncStorage.removeItem('userData');
-              await AsyncStorage.removeItem('userToken');
-              await AsyncStorage.removeItem('userRole');
-              await AsyncStorage.removeItem('userEmail');
+            // Si on est sur la page de login et qu'on a un token valide, rediriger
+            if (path?.includes('login')) {
+              const targetPath = userData.role === 'admin' ? '/(admin)/DashboardScreen' :
+                               userData.role === 'pro' ? '/(pro)/DashboardScreen' :
+                               '/(app)/HomeScreen';
+              console.log('Redirection depuis login vers:', targetPath);
+              router.replace(targetPath);
+              return;
+            }
+
+            // Pour les autres pages, vérifier si on est sur la bonne page
+            const targetPath = userData.role === 'admin' ? '/(admin)/DashboardScreen' :
+                             userData.role === 'pro' ? '/(pro)/DashboardScreen' :
+                             '/(app)/HomeScreen';
+
+            // Ne rediriger que si on n'est pas déjà sur une page valide
+            const isOnValidPage = path?.includes('/(admin)/') || 
+                                path?.includes('/(pro)/') || 
+                                path?.includes('/(app)/') ||
+                                path?.includes('/(screens)/');
+
+            if (!isOnValidPage) {
+              console.log('Redirection vers:', targetPath);
+              router.replace(targetPath);
             }
           }
         } catch (error) {
           console.error('Erreur lors du parsing des données JSON:', error);
-          // En cas d'erreur, supprimer les données stockées
-          await AsyncStorage.removeItem('userData');
-          await AsyncStorage.removeItem('userToken');
-          await AsyncStorage.removeItem('userRole');
-          await AsyncStorage.removeItem('userEmail');
         }
       }
     } catch (error) {
@@ -195,7 +203,8 @@ const LoginScreen: React.FC = () => {
           ['userRole', data.data.user.role],
           ['userId', data.data.user.id.toString()],
           ['userEmail', data.data.user.email],
-          ['userName', data.data.user.fullName || ''],
+          ['userFirstName', data.data.user.firstName],
+          ['userLastName', data.data.user.lastName],
           ['isFirstLaunch', 'false']
         ];
         
@@ -217,7 +226,8 @@ const LoginScreen: React.FC = () => {
           role: data.data.user.role,
           id: data.data.user.id.toString(),
           email: data.data.user.email,
-          fullName: data.data.user.fullName || '',
+          firstName: data.data.user.firstName,
+          lastName: data.data.user.lastName,
           isFirstLaunch: false
         };
         
@@ -326,7 +336,8 @@ const LoginScreen: React.FC = () => {
                     ['userRole', data.data.user.role],
                     ['userId', data.data.user.id.toString()],
                     ['userEmail', data.data.user.email],
-                    ['userName', data.data.user.fullName || ''],
+                    ['userFirstName', data.data.user.firstName],
+                    ['userLastName', data.data.user.lastName],
                     ['isFirstLaunch', 'false']
                 ];
                 
@@ -344,7 +355,8 @@ const LoginScreen: React.FC = () => {
                     role: data.data.user.role,
                     id: data.data.user.id.toString(),
                     email: data.data.user.email,
-                    fullName: data.data.user.fullName || '',
+                    firstName: data.data.user.firstName,
+                    lastName: data.data.user.lastName,
                     isFirstLaunch: false
                 };
                 
@@ -395,7 +407,8 @@ const LoginScreen: React.FC = () => {
             ['userRole', data.data.user.role],
             ['userId', data.data.user.id.toString()],
             ['userEmail', data.data.user.email],
-            ['userName', data.data.user.fullName || ''],
+            ['userFirstName', data.data.user.firstName],
+            ['userLastName', data.data.user.lastName],
             ['isFirstLaunch', 'false']
           ];
           
@@ -413,7 +426,8 @@ const LoginScreen: React.FC = () => {
             role: data.data.user.role,
             id: data.data.user.id.toString(),
             email: data.data.user.email,
-            fullName: data.data.user.fullName || '',
+            firstName: data.data.user.firstName,
+            lastName: data.data.user.lastName,
             isFirstLaunch: false
           };
           

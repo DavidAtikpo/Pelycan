@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { createStackNavigator } from '@react-navigation/stack';
-import { TouchableOpacity, View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { TouchableOpacity, View, Text, StyleSheet, Animated, Dimensions, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import DevenirPartenaireScreen from '../(screens)/user/sidebar/DevenirPartenaireScreen';
 import ProfileScreen from '../(screens)/user/sidebar/profile';
@@ -11,6 +11,7 @@ import PolitiqueConfidentialiteScreen from '../(screens)/user/sidebar/politique-
 import AProposScreen from '../(screens)/user/sidebar/a-propos';
 import { useState, useRef, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 const Stack = createStackNavigator();
 const { width } = Dimensions.get('window');
@@ -20,6 +21,7 @@ function TabLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [userName, setUserName] = useState('');
   const slideAnim = useRef(new Animated.Value(-width)).current;
+  const { expoPushToken } = usePushNotifications();
 
   useEffect(() => {
     // Récupérer le nom de l'utilisateur depuis AsyncStorage
@@ -53,11 +55,26 @@ function TabLayout() {
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.removeItem('userToken');
-      await AsyncStorage.removeItem('userName');
-      router.replace('/login');
+      // Supprimer toutes les données de session
+      await AsyncStorage.multiRemove([
+        'userToken',
+        'userName',
+        'userRole',
+        'userId',
+        'userEmail',
+        'userFirstName',
+        'userLastName',
+        'userData'
+      ]);
+
+      // Fermer le sidebar
+      toggleSidebar();
+
+      // Rediriger vers la page de login
+      router.replace('/(auth)/login');
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors de la déconnexion');
     }
   };
 

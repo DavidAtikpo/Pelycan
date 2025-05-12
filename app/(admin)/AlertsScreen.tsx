@@ -1,360 +1,307 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-import { API_URL } from '../../config/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker } from 'react-native-maps';
+import { useAlerts } from '../../hooks/useAlerts';
 
-interface AlertData {
-  id: string;
-  userId: string;
-  userName: string;
-  location: {
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-  };
-  timestamp: string;
-  status: 'active' | 'processed' | 'closed';
-}
+const AlertsScreen: React.FC = () => {
+    const {
+        alerts,
+        isLoading,
+        error,
+        fetchAlerts,
+        sendMessage,
+        processAlert
+    } = useAlerts();
 
-export default function AlertsScreen() {
-  const [alerts, setAlerts] = useState<AlertData[]>([]);
-  const [selectedAlert, setSelectedAlert] = useState<AlertData | null>(null);
-  const [message, setMessage] = useState('');
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+    const [selectedAlert, setSelectedAlert] = useState<any>(null);
+    const [message, setMessage] = useState('');
+    const [isModalVisible, setIsModalVisible] = useState(false);
 
-  useEffect(() => {
-    fetchAlerts();
-    const interval = setInterval(fetchAlerts, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    const handleSendMessage = async () => {
+        if (!selectedAlert || !message.trim()) return;
 
-  const fetchAlerts = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        throw new Error('Token non trouvé');
-      }
+        try {
+            await sendMessage(selectedAlert.id, message);
+            Alert.alert('Succès', 'Message envoyé avec succès');
+            setMessage('');
+            setIsModalVisible(false);
+        } catch (error) {
+            Alert.alert('Erreur', 'Impossible d\'envoyer le message');
+        }
+    };
 
-      const response = await fetch(`${API_URL}/alerts`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setAlerts(data.alerts);
-        setRetryCount(0); // Réinitialiser le compteur en cas de succès
-      } else {
-        throw new Error('Erreur lors de la récupération des alertes');
-      }
-    } catch (error) {
-      console.error('Erreur lors de la récupération des alertes:', error);
-      setError('Impossible de charger les alertes. Veuillez réessayer.');
-      
-      // Logique de reconnexion avec un maximum de 3 tentatives
-      if (retryCount < 3) {
-        setRetryCount(prev => prev + 1);
-        setTimeout(fetchAlerts, 5000); // Réessayer après 5 secondes
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const handleProcessAlert = async (alertId: string) => {
+        try {
+            await processAlert(alertId);
+        } catch (error) {
+            Alert.alert('Erreur', 'Impossible de traiter l\'alerte');
+        }
+    };
 
-  const handleSendMessage = async () => {
-    if (!selectedAlert || !message.trim()) return;
-
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`${API_URL}/alerts/${selectedAlert.id}/message`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Succès', 'Message envoyé avec succès');
-        setMessage('');
-        setIsModalVisible(false);
-      }
-    } catch (error) {
-      console.error('Erreur lors de l\'envoi du message:', error);
-      Alert.alert('Erreur', 'Impossible d\'envoyer le message');
-    }
-  };
-
-  const handleProcessAlert = async (alertId: string) => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const response = await fetch(`${API_URL}/alerts/${alertId}/process`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        fetchAlerts(); // Rafraîchir la liste
-      }
-    } catch (error) {
-      console.error('Erreur lors du traitement de l\'alerte:', error);
-    }
-  };
-
-  const renderAlertItem = ({ item }: { item: AlertData }) => (
-    <TouchableOpacity 
-      style={[styles.alertItem, { backgroundColor: item.status === 'active' ? '#FFE0E0' : '#FFF' }]}
-      onPress={() => {
-        setSelectedAlert(item);
-        setIsModalVisible(true);
-      }}
-    >
-      <Text style={styles.alertTitle}>Alerte de {item.userName}</Text>
-      <Text style={styles.alertTime}>
-        {new Date(item.timestamp).toLocaleString()}
-      </Text>
-      <Text style={styles.alertStatus}>
-        Status: {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  return (
-    <View style={styles.container}>
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0000ff" />
-          <Text style={styles.loadingText}>Chargement des alertes...</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={fetchAlerts}
-          >
-            <Text style={styles.retryButtonText}>Réessayer</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <>
-          <FlatList
-            data={alerts}
-            renderItem={renderAlertItem}
-            keyExtractor={(item) => item.id}
-            style={styles.list}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Aucune alerte à afficher</Text>
-              </View>
-            }
-          />
-
-          <Modal
-            visible={isModalVisible}
-            animationType="slide"
-            onRequestClose={() => setIsModalVisible(false)}
-          >
-            <View style={styles.modalContainer}>
-              <TouchableOpacity 
-                style={styles.closeButton}
-                onPress={() => setIsModalVisible(false)}
-              >
-                <Ionicons name="close" size={24} color="#000" />
-              </TouchableOpacity>
-
-              {selectedAlert && (
-                <>
-                  <Text style={styles.modalTitle}>
-                    Alerte de {selectedAlert.userName}
-                  </Text>
-
-                  <MapView
-                    style={styles.map}
-                    initialRegion={{
-                      latitude: selectedAlert.location.latitude,
-                      longitude: selectedAlert.location.longitude,
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    }}
-                  >
-                    <Marker
-                      coordinate={{
-                        latitude: selectedAlert.location.latitude,
-                        longitude: selectedAlert.location.longitude,
-                      }}
-                      title={`Position de ${selectedAlert.userName}`}
-                    />
-                  </MapView>
-
-                  <View style={styles.messageContainer}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Envoyer un message à la victime..."
-                      value={message}
-                      onChangeText={setMessage}
-                      multiline
-                    />
-                    <TouchableOpacity 
-                      style={styles.sendButton}
-                      onPress={handleSendMessage}
-                    >
-                      <Text style={styles.sendButtonText}>Envoyer</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {selectedAlert.status === 'active' && (
-                    <TouchableOpacity 
-                      style={styles.processButton}
-                      onPress={() => handleProcessAlert(selectedAlert.id)}
-                    >
-                      <Text style={styles.processButtonText}>
-                        Marquer comme traité
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              )}
+    if (isLoading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#FF3B30" />
+                <Text style={styles.loadingText}>Chargement...</Text>
             </View>
-          </Modal>
-        </>
-      )}
-    </View>
-  );
-}
+        );
+    }
+
+    return (
+        <ScrollView style={styles.container}>
+            <View style={styles.section}>
+                <View style={styles.header}>
+                    <Ionicons name="alert-circle" size={24} color="#FF3B30" />
+                    <Text style={styles.headerTitle}>Alertes en cours</Text>
+                </View>
+
+                {error ? (
+                    <View style={styles.errorContainer}>
+                        <Text style={styles.errorText}>{error}</Text>
+                        <TouchableOpacity 
+                            style={styles.retryButton}
+                            onPress={() => fetchAlerts(true)}
+                        >
+                            <Text style={styles.retryButtonText}>Réessayer</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : alerts.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>Aucune alerte active</Text>
+                    </View>
+                ) : (
+                    alerts.map((alert) => (
+                        <TouchableOpacity
+                            key={alert.id}
+                            style={[styles.alertItem, { backgroundColor: alert.status === 'active' ? '#FFE0E0' : '#FFF' }]}
+                            onPress={() => {
+                                setSelectedAlert(alert);
+                                setIsModalVisible(true);
+                            }}
+                        >
+                            <Text style={styles.alertTitle}>Alerte de {alert.userName}</Text>
+                            <Text style={styles.alertTime}>
+                                {new Date(alert.timestamp).toLocaleString()}
+                            </Text>
+                            <Text style={styles.alertStatus}>
+                                Status: {alert.status.charAt(0).toUpperCase() + alert.status.slice(1)}
+                            </Text>
+                        </TouchableOpacity>
+                    ))
+                )}
+            </View>
+
+            <Modal
+                visible={isModalVisible}
+                animationType="slide"
+                onRequestClose={() => setIsModalVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <TouchableOpacity 
+                        style={styles.closeButton}
+                        onPress={() => setIsModalVisible(false)}
+                    >
+                        <Ionicons name="close" size={24} color="#000" />
+                    </TouchableOpacity>
+
+                    {selectedAlert && (
+                        <>
+                            <Text style={styles.modalTitle}>
+                                Alerte de {selectedAlert.userName}
+                            </Text>
+
+                            <MapView
+                                style={styles.map}
+                                initialRegion={{
+                                    latitude: selectedAlert.location.latitude,
+                                    longitude: selectedAlert.location.longitude,
+                                    latitudeDelta: 0.01,
+                                    longitudeDelta: 0.01,
+                                }}
+                            >
+                                <Marker
+                                    coordinate={{
+                                        latitude: selectedAlert.location.latitude,
+                                        longitude: selectedAlert.location.longitude,
+                                    }}
+                                    title={`Position de ${selectedAlert.userName}`}
+                                />
+                            </MapView>
+
+                            <View style={styles.messageContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Envoyer un message à la victime..."
+                                    value={message}
+                                    onChangeText={setMessage}
+                                    multiline
+                                />
+                                <TouchableOpacity 
+                                    style={styles.sendButton}
+                                    onPress={handleSendMessage}
+                                >
+                                    <Text style={styles.sendButtonText}>Envoyer</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {selectedAlert.status === 'active' && (
+                                <TouchableOpacity 
+                                    style={styles.processButton}
+                                    onPress={() => handleProcessAlert(selectedAlert.id)}
+                                >
+                                    <Text style={styles.processButtonText}>
+                                        Marquer comme traité
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </>
+                    )}
+                </View>
+            </Modal>
+        </ScrollView>
+    );
+};
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  list: {
-    flex: 1,
-  },
-  alertItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#DDD',
-  },
-  alertTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  alertTime: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
-  },
-  alertStatus: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#FFF',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    zIndex: 1,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 50,
-    marginBottom: 20,
-  },
-  map: {
-    height: 300,
-    marginHorizontal: 20,
-    marginBottom: 20,
-  },
-  messageContainer: {
-    padding: 20,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 5,
-    padding: 10,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  sendButton: {
-    backgroundColor: '#2196F3',
-    padding: 15,
-    borderRadius: 5,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  sendButtonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-  },
-  processButton: {
-    backgroundColor: '#4CAF50',
-    padding: 15,
-    borderRadius: 5,
-    margin: 20,
-    alignItems: 'center',
-  },
-  processButtonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#FF0000',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#2196F3',
-    padding: 10,
-    borderRadius: 5,
-  },
-  retryButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-  },
-}); 
+    container: {
+        flex: 1,
+        backgroundColor: '#F5F5F5',
+    },
+    section: {
+        marginBottom: 20,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: 'white',
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginLeft: 10,
+        color: '#333',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#666',
+    },
+    errorContainer: {
+        padding: 20,
+        alignItems: 'center',
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#FF0000',
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    retryButton: {
+        backgroundColor: '#2196F3',
+        padding: 10,
+        borderRadius: 5,
+    },
+    retryButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+    },
+    emptyContainer: {
+        padding: 20,
+        alignItems: 'center',
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#666',
+    },
+    alertItem: {
+        backgroundColor: 'white',
+        margin: 10,
+        padding: 15,
+        borderRadius: 10,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+    },
+    alertTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    alertTime: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 5,
+    },
+    alertStatus: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 5,
+    },
+    modalContainer: {
+        flex: 1,
+        backgroundColor: '#FFF',
+    },
+    closeButton: {
+        position: 'absolute',
+        top: 40,
+        right: 20,
+        zIndex: 1,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginTop: 50,
+        marginBottom: 20,
+    },
+    map: {
+        height: 300,
+        marginHorizontal: 20,
+        marginBottom: 20,
+    },
+    messageContainer: {
+        padding: 20,
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#DDD',
+        borderRadius: 5,
+        padding: 10,
+        minHeight: 100,
+        textAlignVertical: 'top',
+    },
+    sendButton: {
+        backgroundColor: '#2196F3',
+        padding: 15,
+        borderRadius: 5,
+        marginTop: 10,
+        alignItems: 'center',
+    },
+    sendButtonText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+    },
+    processButton: {
+        backgroundColor: '#4CAF50',
+        padding: 15,
+        borderRadius: 5,
+        margin: 20,
+        alignItems: 'center',
+    },
+    processButtonText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+    },
+});
+
+export default AlertsScreen; 

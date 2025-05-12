@@ -7,6 +7,7 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE, LatLng, Camera } from 'reac
 import { Picker } from '@react-native-picker/picker';
 import * as Location from 'expo-location';
 import { API_URL } from '../../config/api';
+import { useRouter } from 'expo-router';
 
 interface EmergencyDetails {
   id: string;
@@ -43,6 +44,7 @@ const EmergencyDetailsScreen: React.FC = () => {
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
+  const router = useRouter();
 
   // Effet pour mettre à jour la distance quand les détails ou la position changent
   useEffect(() => {
@@ -168,6 +170,13 @@ const EmergencyDetailsScreen: React.FC = () => {
     longitude: parseFloat(details.longitude)
   });
 
+  const handleBack = () => {
+    // Stocker temporairement l'information que nous revenons au dashboard
+    AsyncStorage.setItem('returningToDashboard', 'true').then(() => {
+      router.replace('/(admin)/DashboardScreen');
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -189,14 +198,10 @@ const EmergencyDetailsScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Détails de l'Urgence</Text>
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={fetchEmergencyDetails}
-          disabled={loading}
-        >
-          <Ionicons name="refresh" size={24} color="#2196F3" />
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#D81B60" />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Détails de l'urgence</Text>
       </View>
 
       <View style={styles.section}>
@@ -430,10 +435,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  title: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
+  },
+  backButton: {
+    padding: 10,
   },
   statusBadge: {
     paddingHorizontal: 15,

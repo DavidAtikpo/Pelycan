@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, ActivityIndicator, Image, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, ActivityIndicator, Image, Modal, TextInput } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../../config/api';
@@ -16,6 +16,7 @@ interface EmergencyRequest {
     location: LocationData;
     timestamp: string;
     type: 'HEBERGEMENT' | 'ASSISTANCE' | 'LOGEMENT' | 'VIOLENCE' | 'GENERAL';
+    message: string;
 }
 
 interface EmergencyHistory {
@@ -40,6 +41,10 @@ const DemandeUrgenceScreen: React.FC = () => {
     const [showHistory, setShowHistory] = useState(false);
     const [showFirstAid, setShowFirstAid] = useState(false);
     const [showSecurity, setShowSecurity] = useState(false);
+    const [showRequestModal, setShowRequestModal] = useState(false);
+    const [selectedType, setSelectedType] = useState<EmergencyRequest['type']>('GENERAL');
+    const [selectedDescription, setSelectedDescription] = useState('');
+    const [customDescription, setCustomDescription] = useState('');
 
     useEffect(() => {
         (async () => {
@@ -126,15 +131,64 @@ const DemandeUrgenceScreen: React.FC = () => {
         }
     };
 
-    const sendEmergencyRequest = async (type: EmergencyRequest['type']) => {
+    const emergencyOptions = {
+        HEBERGEMENT: [
+            "J'ai besoin d'un hébergement d'urgence pour la nuit",
+            "Je suis sans abri et j'ai besoin d'un toit",
+            "Je suis en situation de précarité et j'ai besoin d'un logement temporaire"
+        ],
+        ASSISTANCE: [
+            "J'ai besoin d'une assistance immédiate",
+            "Je suis en situation de détresse",
+            "J'ai besoin d'aide pour une situation urgente"
+        ],
+        LOGEMENT: [
+            "Je cherche un logement d'urgence",
+            "Je suis menacé d'expulsion",
+            "J'ai besoin d'un logement temporaire"
+        ],
+        VIOLENCE: [
+            "Je suis victime de violence",
+            "Je me sens en danger",
+            "J'ai besoin d'aide pour une situation de violence"
+        ],
+        GENERAL: [
+            "J'ai besoin d'aide d'urgence",
+            "Je suis en situation de détresse",
+            "J'ai besoin d'assistance immédiate"
+        ]
+    };
+
+    const handleServicePress = (type: EmergencyRequest['type']) => {
+        setSelectedType(type);
+        setSelectedDescription('');
+        setCustomDescription('');
+        setShowRequestModal(true);
+    };
+
+    const sendEmergencyRequest = async () => {
         if (!location || !userId) {
             Alert.alert('Erreur', 'Impossible d\'envoyer la demande d\'urgence. Vérifiez votre connexion et votre localisation.');
+            return;
+        }
+
+        const message = selectedDescription || customDescription;
+        if (!message) {
+            Alert.alert('Erreur', 'Veuillez sélectionner une option ou écrire votre message');
             return;
         }
 
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
+            const pushToken = await AsyncStorage.getItem('pushToken');
+
+            // Vérifier si le token push est enregistré
+            if (!pushToken) {
+                console.log('Token push non trouvé, mise à jour nécessaire');
+                // Vous pouvez ajouter ici la logique pour demander à l'utilisateur de mettre à jour son token push
+            }
+
             const response = await fetch(`${API_URL}/emergency/request`, {
                 method: 'POST',
                 headers: {
@@ -145,7 +199,8 @@ const DemandeUrgenceScreen: React.FC = () => {
                     userId,
                     location,
                     timestamp: new Date().toISOString(),
-                    type,
+                    type: selectedType,
+                    message
                 } as EmergencyRequest),
             });
 
@@ -153,11 +208,20 @@ const DemandeUrgenceScreen: React.FC = () => {
                 throw new Error('Erreur lors de l\'envoi de la demande d\'urgence');
             }
 
+            const data = await response.json();
             Alert.alert(
                 'Demande envoyée',
-                'Les services d\'urgence ont été notifiés de votre situation.',
+                `Les services d'urgence ont été notifiés de votre situation.\n${data.notifications_sent} professionnels ont été alertés.`,
                 [{ text: 'OK' }]
             );
+            setShowRequestModal(false);
+            setSelectedDescription('');
+            setCustomDescription('');
+            
+            // Recharger l'historique si nécessaire
+            if (userId) {
+                loadEmergencyHistory(userId);
+            }
         } catch (error) {
             console.error('Erreur:', error);
             Alert.alert('Erreur', 'Impossible d\'envoyer la demande d\'urgence');
@@ -178,7 +242,7 @@ const DemandeUrgenceScreen: React.FC = () => {
                 {
                     text: `Appeler le ${number}`,
                     onPress: async () => {
-                        await sendEmergencyRequest(type);
+                        await sendEmergencyRequest();
                         Linking.openURL(`tel:${number}`);
                     }
                 }
@@ -299,6 +363,77 @@ const DemandeUrgenceScreen: React.FC = () => {
         </Modal>
     );
 
+    const renderRequestModal = () => (
+        <Modal
+            visible={showRequestModal}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setShowRequestModal(false)}
+        >
+            <View style={styles.modalContainer}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Décrivez votre situation</Text>
+                        <TouchableOpacity onPress={() => {
+                            setShowRequestModal(false);
+                            setSelectedDescription('');
+                            setCustomDescription('');
+                        }}>
+                            <Ionicons name="close" size={24} color="#333" />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.modalScroll}>
+                        <Text style={styles.modalSubtitle}>Sélectionnez une option :</Text>
+                        
+                        {emergencyOptions[selectedType].map((option, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={[
+                                    styles.optionButton,
+                                    selectedDescription === option && styles.selectedOption
+                                ]}
+                                onPress={() => {
+                                    setSelectedDescription(option);
+                                    setCustomDescription('');
+                                }}
+                            >
+                                <Text style={styles.optionText}>{option}</Text>
+                            </TouchableOpacity>
+                        ))}
+
+                        {!selectedDescription && (
+                            <>
+                                <Text style={styles.modalSubtitle}>Ou écrivez votre message :</Text>
+                                <TextInput
+                                    style={styles.customInput}
+                                    multiline
+                                    numberOfLines={4}
+                                    placeholder="Décrivez votre situation..."
+                                    value={customDescription}
+                                    onChangeText={(text) => {
+                                        setCustomDescription(text);
+                                        setSelectedDescription('');
+                                    }}
+                                />
+                            </>
+                        )}
+
+                        <TouchableOpacity
+                            style={[
+                                styles.sendButton,
+                                (!selectedDescription && !customDescription) && styles.sendButtonDisabled
+                            ]}
+                            onPress={sendEmergencyRequest}
+                            disabled={!selectedDescription && !customDescription}
+                        >
+                            <Text style={styles.sendButtonText}>Envoyer la demande</Text>
+                        </TouchableOpacity>
+                    </ScrollView>
+                </View>
+            </View>
+        </Modal>
+    );
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -342,7 +477,7 @@ const DemandeUrgenceScreen: React.FC = () => {
                     <TouchableOpacity 
                         key={service.id}
                         style={styles.serviceCard}
-                        onPress={() => handleEmergencyCall('112', service.type as EmergencyRequest['type'])}
+                        onPress={() => handleServicePress(service.type as EmergencyRequest['type'])}
                     >
                         <Ionicons name={service.icon as any} size={24} color="#FF3B30" />
                         <Text style={styles.serviceName}>{service.name}</Text>
@@ -404,6 +539,7 @@ const DemandeUrgenceScreen: React.FC = () => {
             {renderHistoryModal()}
             {renderInstructionsModal(showFirstAid, setShowFirstAid, "Premiers Secours", firstAidInstructions)}
             {renderInstructionsModal(showSecurity, setShowSecurity, "Consignes de Sécurité", securityInstructions)}
+            {renderRequestModal()}
         </ScrollView>
     );
 };
@@ -633,6 +769,54 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#333',
         lineHeight: 24,
+    },
+    optionButton: {
+        backgroundColor: '#f8f8f8',
+        padding: 15,
+        borderRadius: 10,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    selectedOption: {
+        backgroundColor: '#FFF3F3',
+        borderColor: '#FF3B30',
+    },
+    optionText: {
+        fontSize: 16,
+        color: '#333',
+    },
+    customInput: {
+        backgroundColor: '#f8f8f8',
+        padding: 15,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        minHeight: 100,
+        textAlignVertical: 'top',
+        marginBottom: 20,
+    },
+    sendButton: {
+        backgroundColor: '#FF3B30',
+        padding: 15,
+        borderRadius: 10,
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    sendButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    modalSubtitle: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#333',
+        marginBottom: 10,
+        marginTop: 20,
+    },
+    sendButtonDisabled: {
+        backgroundColor: '#ccc',
     },
 });
 
